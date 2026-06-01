@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no">
+    <title>Wadhwa Sir's Classroom - Logical Connectives</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+      window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, options: { enableMenu: false, renderActions: { addMenu: [] } }, startup: { typeset: true }, svg: { fontCache: 'global' } };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        /* === ENABLE TEXT SELECTION & LONG PRESS FOR COPY === */
+        body {
+            -webkit-touch-callout: default;
+            -webkit-user-select: text;
+            -khtml-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+            overflow: hidden; /* Prevent body scroll */
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            height: 100dvh; /* Mobile browser height fix */
+        }
+        input, textarea {
+            -webkit-user-select: auto !important;
+            -khtml-user-select: auto !important;
+            -moz-user-select: auto !important;
+            -ms-user-select: auto !important;
+            user-select: auto !important;
+        }
+
+        /* === VARIABLES === */
+        :root {
+            --bg-color: #f8f9fa; --container-bg: #ffffff; --text-main: #1a1a1a;
+            --text-muted: #555555; --input-bg: #f0f2f5; --border-color: #e0e0e0;
+            --header-bg: #ffffff; --shadow-color: rgba(0, 0, 0, 0.1);
+            --accent-orange: #e68a00; --board-bg: #fdfdfd;
+        }
+
+        .dark-mode {
+            --bg-color: #000000; --container-bg: #0d1b2a; --text-main: #ffffff;
+            --text-muted: #a0aab2; --input-bg: rgba(255, 255, 255, 0.05); --border-color: rgba(255, 255, 255, 0.1);
+            --header-bg: #1b263b; --shadow-color: rgba(0, 0, 0, 0.8); --board-bg: #0b141e;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Poppins', sans-serif !important; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+
+        #app-container { 
+            width: 100%; 
+            max-width: 420px; 
+            height: 100%; 
+            background: var(--container-bg); 
+            position: relative; 
+            box-shadow: 0 0 20px var(--shadow-color); 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+
+        /* === GLOBAL MENUS === */
+        .icon-circle { width:40px; height:40px; border-radius:50%; background:var(--input-bg); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--text-main); flex-shrink:0; box-shadow:0 3px 10px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.2s;}
+        .icon-circle:active { transform: scale(0.9); }
+        
+        .dropdown-menu { position: absolute; top: 118px; left: 12px; background: var(--header-bg); border: 1px solid var(--border-color); border-radius: 15px; padding: 10px; width: 200px; box-shadow: 0 10px 30px var(--shadow-color); z-index: 104; display: flex; flex-direction: column; gap: 10px; transform: scale(0); opacity: 0; transition: all 0.3s ease; pointer-events: none; transform-origin: top left; }
+        .dropdown-menu.active { transform: scale(1); opacity: 1; pointer-events: all; }
+        
+        .subtopic-dropdown { position: absolute; top: 118px; right: 12px; background: var(--header-bg); border-radius: 15px; padding: 10px; width: 200px; box-shadow: 0 10px 30px var(--shadow-color); z-index: 104; display: flex; flex-direction: column; gap: 10px; transform: scale(0); opacity: 0; transition: all 0.3s ease; border: 2px solid var(--accent-orange); max-height: 400px; overflow-y: auto; pointer-events: none; transform-origin: top right; }
+        .subtopic-dropdown.active { transform: scale(1); opacity: 1; pointer-events: all; }
+        
+        .drop-btn { width: 100%; padding: 12px 15px; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 12px; cursor: pointer; color: white; }
+        #btn-theme { background-color: #000000; color: #ffffff; border: 1px solid rgba(255,255,255,0.2); }
+        body.dark-mode #btn-theme { background-color: #ffffff; color: #000000; }
+        .btn-exit { background: linear-gradient(135deg, #FF416C, #FF4B2B); }
+        
+        .subtopic-btn { background: var(--input-bg); color: var(--text-main); border: none; padding: 10px 15px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .subtopic-btn:active { transform: scale(0.95); }
+
+        /* === 3D ACADEMIC TIMER === */
+        .academic-timer { background: linear-gradient(145deg, #ffffff, #e6e6e6); color: #1a1a1a; padding: 6px 14px; border-radius: 12px; font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; box-shadow: 4px 4px 8px rgba(0,0,0,0.15), -4px -4px 8px rgba(255,255,255,0.8), inset 1px 1px 2px rgba(255,255,255,0.6); border: 1px solid rgba(0,0,0,0.05); min-width: 90px; justify-content: center; font-variant-numeric: tabular-nums; }
+        body.dark-mode .academic-timer { background: linear-gradient(145deg, #1b263b, #0d1b2a); color: #ffffff; box-shadow: 4px 4px 10px rgba(0,0,0,0.7), -2px -2px 6px rgba(255,255,255,0.05), inset 1px 1px 2px rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); }
+        .academic-timer i, .academic-timer svg { color: var(--accent-orange); font-size: 0.95rem; }
+
+        /* === SUBTOPIC READING SCREEN & PROGRESS BAR === */
+        #subtopic-page { background: var(--board-bg); position: relative; display: flex; flex-direction: column; height: 100%; width: 100%; }
+        
+        .header-top { background: var(--header-bg); padding: 14px 14px 10px; border-bottom: 1px solid var(--border-color); }
+        .brand { color: var(--text-muted); font-size: 0.95rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+        .brand-big { color: var(--text-main); font-size: 2.4rem; font-weight: 900; line-height: 1; margin: 2px 0 10px; letter-spacing: 0.5px; }
+        
+        .subtopic-bar { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 8px; padding: 0 4px; margin-top: 8px; }
+        .subtopic-title { text-align: center; color: var(--accent-orange); font-weight: 800; font-size: 1.0rem; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word;}
+        
+        .lesson-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--container-bg); border-bottom: 1px solid var(--border-color); }
+        .lesson-name { color: #f59e0b; font-weight: 800; font-size: 1.15rem; }
+
+        .controls { display: flex; background: var(--header-bg); padding: 10px; gap: 8px; border-bottom: 1px solid var(--border-color); }
+        .read-btn { flex: 1; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); font-weight: 700; padding: 12px 4px; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; cursor: pointer; }
+        .read-btn.active { color: white; background: var(--accent-orange); border-color: var(--accent-orange); }
+        #btn-read-action { background: var(--accent-orange); color: white; border: none; }
+        
+        @keyframes breathe { 0% { box-shadow: 0 0 5px #38ef7d; transform: scale(1); } 50% { box-shadow: 0 0 20px #38ef7d; transform: scale(1.05); } 100% { box-shadow: 0 0 5px #38ef7d; transform: scale(1); } }
+        .btn-breathe { animation: breathe 1.5s infinite; background: linear-gradient(135deg, #11998e, #38ef7d) !important; color: white !important; }
+
+        .board-area { flex: 1; padding: 20px; padding-bottom: 40px; overflow-y: auto; font-size: 1.1rem; line-height: 1.6; font-weight: 500; color: #2c3e50; }
+        body.dark-mode .board-area { color: #dcdde1; }
+
+        .text-3d-card { background: linear-gradient(145deg, var(--input-bg), var(--header-bg)); border: 1px solid var(--border-color); padding: 20px; border-radius: 15px; box-shadow: 5px 5px 15px var(--shadow-color), inset -2px -2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; display: block; width: 100%; position: relative; overflow-x: auto; word-break: break-word; min-height: 150px; }
+
+        /* === ACADEMIC TEXT FORMATTING === */
+        .lesson-heading { font-weight: 800; font-size: 1.25rem; color: var(--accent-orange); margin-bottom: 8px; line-height: 1.4; display: block; border-bottom: 2px solid var(--accent-orange); padding-bottom: 5px; }
+        body.dark-mode .lesson-heading { color: #f39c12; border-bottom-color: #f39c12; }
+        .lesson-subheading { font-weight: 700; color: #0052D4; background: rgba(0, 82, 212, 0.1); padding: 6px 12px; border-left: 4px solid #0052D4; border-radius: 4px; margin-top: 15px; margin-bottom: 10px; display: inline-block; width: 100%; }
+        body.dark-mode .lesson-subheading { color: #66a6ff; background: rgba(102, 166, 255, 0.15); border-left-color: #66a6ff; }
+        .list-item { display: block; margin-top: 8px; margin-bottom: 8px; padding-left: 15px; position: relative; }
+
+        .cursor::after { content: '|'; animation: blink 1s step-end infinite; color: var(--accent-orange); }
+        .cursor.reading-done::after { display: none; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .hl-orange { color: var(--accent-orange); font-weight: 700; }
+        .hl-blue { color: #0052D4; font-weight: 700; }
+        body.dark-mode .hl-blue { color: #66a6ff; }
+        .hl-green { color: #11998e; font-weight: 700; }
+        body.dark-mode .hl-green { color: #38ef7d; }
+
+        /* === TRUTH TABLE STYLING === */
+        .table-container { width: 100%; margin: 15px 0; overflow-x: auto; padding-bottom: 5px; }
+        mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; display: inline; vertical-align: middle; padding: 0 2px; }
+        mjx-container[display="true"] { display: block; overflow-x: auto; padding-bottom: 5px; }
+        .academic-table { width: 100%; border-collapse: collapse; box-shadow: 0 5px 15px var(--shadow-color); border-radius: 10px; overflow: hidden; background: var(--container-bg); min-width: 250px; }
+        .academic-table th, .academic-table td { padding: 12px; text-align: center; border: 1px solid var(--border-color); color: var(--text-main); font-weight: 600;}
+        .academic-table th { background: linear-gradient(135deg, #0052D4, #4364F7); color: white; font-weight: 800; font-size: 1.1rem; border: none;}
+        .academic-table tr:nth-child(even) { background-color: rgba(0, 82, 212, 0.05); }
+        body.dark-mode .academic-table tr:nth-child(even) { background-color: rgba(102, 166, 255, 0.1); }
+
+        /* === DUSTER ANIMATION === */
+        .duster-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; display: none; overflow: hidden; pointer-events: none;}
+        .duster-wrapper.active { display: block; }
+        .eraser-mask { position: absolute; top: 0; left: 0; width: 100%; height: 0%; background: linear-gradient(145deg, var(--input-bg), var(--header-bg)); animation: wipeDown 1.0s linear forwards; }
+        .duster-brush { position: absolute; width: 60px; height: 30px; background: #c0392b; border-radius: 4px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); border-bottom: 8px solid #ecf0f1; animation: zigZag 1.0s linear forwards; top: 0; left: 0; margin-left: -30px; margin-top: -15px; z-index: 51; }
+        @keyframes wipeDown { 0% { height: 0%; } 100% { height: 100%; } }
+        @keyframes zigZag { 0% { top: 0%; left: 0%; } 20% { top: 20%; left: 100%; } 40% { top: 40%; left: 0%; } 60% { top: 60%; left: 100%; } 80% { top: 80%; left: 0%; } 100% { top: 100%; left: 100%; opacity: 0; } }
+
+        .choice-box { margin-top: 10px; display: none; flex-direction: column; gap: 12px; padding-bottom: 20px; width: 100%; }
+        .nav-btn { font-size: 0.95rem; justify-content: center; padding: 14px; border-radius: 12px; }
+        .nav-btn:disabled { background: var(--text-muted) !important; cursor: not-allowed; opacity: 0.5; box-shadow: none; }
+        
+        /* FIX: Summary text visibility in dark mode */
+        #summary-screen .text-3d-card p {
+            color: var(--text-primary) !important;
+        }
+        body.dark-mode #summary-screen .text-3d-card {
+            background: #121212 !important;
+            border-color: #333 !important;
+        }
+        body.dark-mode #summary-screen .text-3d-card p {
+            color: #FFFFFF !important;
+        }
+        
+        /* Modal */
+        .modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 150; }
+        .modal-content { background: var(--header-bg); padding: 30px; border-radius: 20px; text-align: center; transform: scale(0.8); transition: all 0.3s ease; width: 85%; }
+        .modal-overlay.active { display: flex; }
+        .modal-overlay.active .modal-content { transform: scale(1); }
+        .close-modal { margin-top: 20px; padding: 10px 25px; border-radius: 20px; background: var(--accent-orange); color: white; border: none; font-weight: 600; cursor: pointer; }
+
+        /* === FOOTER === */
+        .page-footer {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            padding: 10px 8px 12px;
+            font-size: 0.7rem;
+            color: #999999;
+            background: var(--container-bg);
+            border-top: 1px solid var(--border-color);
+            z-index: 1000;
+            pointer-events: none;
+        }
+        body.dark-mode .page-footer {
+            color: #aaaaaa;
+            background: var(--container-bg);
+            border-top-color: var(--border-color);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        
+        <div id="dropdown-menu" class="dropdown-menu">
+            <button id="btn-theme" class="drop-btn" onclick="toggleTheme()">
+                <i class="fa-solid fa-circle-half-stroke"></i> <span id="theme-text">Dark Mode</span>
+            </button>
+            <button id="btn-exit" class="drop-btn btn-exit" onclick="exitSubtopic()">
+                <i class="fa-solid fa-power-off"></i> Exit Subtopic
+            </button>
+        </div>
+
+        <div id="subtopic-dropdown" class="subtopic-dropdown">
+            <button class="subtopic-btn" onclick="jumpToLesson(0); toggleDropdown(event, 'subtopic-dropdown')" style="background: linear-gradient(135deg, #0052D4, #4364F7); color: white;">
+                <i class="fa-solid fa-graduation-cap"></i> Introduction
+            </button>
+            <button class="subtopic-btn" onclick="jumpToLesson(1); toggleDropdown(event, 'subtopic-dropdown')" style="background: linear-gradient(135deg, #8E2DE2, #4A00E0); color: white;">
+                <i class="fa-solid fa-chalkboard-user"></i> Explanation
+            </button>
+            <button class="subtopic-btn" onclick="jumpToLesson(4); toggleDropdown(event, 'subtopic-dropdown')" style="background: linear-gradient(135deg, #11998e, #38ef7d); color: white;">
+                <i class="fa-solid fa-list-ol"></i> Examples
+            </button>
+            <button class="subtopic-btn" onclick="jumpToLesson(5); toggleDropdown(event, 'subtopic-dropdown')" style="background: linear-gradient(135deg, #f12711, #f5af19); color: white;">
+                <i class="fa-solid fa-star"></i> Master Stroke
+            </button>
+        </div>
+
+        <div id="subtopic-page">
+            <div class="header-top">
+                <div class="brand">WADHWA SIR'S</div>
+                <div class="brand-big">CLASSROOM</div>
+                <div class="subtopic-bar">
+                    <button id="global-menu-btn" class="icon-circle" onclick="toggleDropdown(event, 'dropdown-menu')" aria-label="Menu">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                    </button>
+                    
+                    <div class="subtopic-title" id="st-subtopic-name-display">LOGICAL CONNECTIVES</div>
+                    
+                    <button id="subtopic-menu-btn" class="icon-circle" onclick="toggleDropdown(event, 'subtopic-dropdown')" aria-label="Topics">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="lesson-bar">
+                <div class="lesson-name" id="st-subtitle-text">Introduction 🎓</div>
+                <div class="academic-timer" id="academic-timer" onclick="exitSubtopic()" style="cursor:pointer;" title="Back / Exit">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                    <span>Back</span>
+                    <span id="timer-display" style="display:none;">00:00</span>
+                </div>
+            </div>
+            
+            <div class="controls" id="lesson-controls">
+                <button class="read-btn" id="mode-full" onclick="setReadMode('full')" onmousedown="startFullReadPress(event)" ontouchstart="startFullReadPress(event)" onmouseup="cancelFullReadPress(event)" onmouseleave="cancelFullReadPress(event)" ontouchend="cancelFullReadPress(event)">Non Stop</button>
+                <button class="read-btn" id="btn-read-action" onclick="toggleReading()"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play</button>
+                <button class="read-btn active" id="mode-sentence" onclick="setReadMode('sentence')">By Sentence</button>
+            </div>
+            
+            <div class="board-area" id="board-area">
+                <div class="text-3d-card">
+                    <span id="board-text" class="cursor"></span>
+                    <div class="duster-wrapper" id="duster">
+                        <div class="eraser-mask"></div>
+                        <div class="duster-brush"></div>
+                    </div>
+                </div>
+                
+                <div class="choice-box" id="choice-box"></div>
+            </div>
+
+            <!-- FEATURE 4: SUMMARY SCREEN -->
+            <div id="summary-screen" style="display:none; padding: 0 4px 140px 4px;">
+                <div class="text-3d-card" style="text-align:left; max-height: calc(100vh - 260px); overflow-y: auto; padding: 20px;">
+                    <h2 style="color: var(--accent-orange); text-align:center; margin-bottom: 16px; font-size: 1.4rem; font-weight: 800;">Summary for Students</h2>
+                    <p style="font-size: 1.05rem; line-height: 1.8;">
+                        Logical connectives are the small words that join two simple statements to make a bigger, meaningful sentence in mathematics. In this topic you learned about five main connectives. Negation means 'not', it simply reverses the truth of a statement. Conjunction uses 'and', it is true only when both parts are true. Disjunction uses 'or', it is true when at least one part is true. Implication means 'if...then', it shows that one statement is sufficient for another, and it is false only when the first is true but the second is false. Biconditional means 'if and only if', it is true when both statements have the same truth value. 
+                        <br><br>
+                        Truth tables help you to see all possible combinations quickly, and they are very useful for exams. Remember the simple ideas: 'p is sufficient for q' means p → q, 'p is necessary for q' means q → p, and 'p if and only if q' means p ↔ q. Practice by converting English sentences into symbols, because that is what most questions ask. Do not just memorize symbols, understand the meaning with daily life examples like 'If it rains, then the ground is wet'. 
+                        <br><br>
+                        This foundation will help you in the next chapters of Mathematical Logic, especially when you study tautologies, contradictions, and logical equivalence. Revise these five connectives daily for five minutes, make your own truth tables, and you will never get confused in exams.
+                    </p>
+                </div>
+                
+                <div class="choice-box" id="summary-nav" style="display:block; margin-top: 16px; padding-bottom: 20px;"></div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="generalModal">
+            <div class="modal-content">
+                <h2 id="modalTitle" style="color: var(--accent-orange);">Notice</h2>
+                <p id="modalText" style="margin-top: 10px; font-size: 0.95rem; font-weight: 500;"></p>
+                <button class="close-modal" onclick="closeModal('generalModal')">Close</button>
+            </div>
+        </div>
+
+        <div class="page-footer">© 2026 Wadhwa Sir's Classroom, Ulhasnagar. For personal study use only.</div>
+    </div>
+
+    <script>
+        // STRICT DATA FOR SUBTOPIC 2
+        const subtopicData = {
+            lessonTitles: [
+                "Introduction 🎓", "Professor Wadhwa's Explanation 💡", "Professor Wadhwa's Deep Explanation 🧠",
+                "Professor Wadhwa's Innovative Explanation 🚀", "Professor Wadhwa's Examples & Tables 📝", "Master Stroke 🔥"
+            ],
+            lessons: [
+                { 
+                    sentences: [
+                        "[H] 🎓 Professor Wadhwa's Introduction:",
+                        "In everyday language, we rarely speak in short, isolated sentences. We link our thoughts together to convey complex ideas.",
+                        "Mathematical Logic requires the exact same capability! To build complex mathematical proofs and statements, we must combine basic statements using specific mathematical \"glue\".",
+                        "These are known as Logical Connectives."
+                    ]
+                },
+                { 
+                    sentences: [
+                        "[H] 💡 Professor Wadhwa's Academic Explanation:",
+                        "[SH] Definition:",
+                        "The words or phrases which are used to connect two statements are called logical connectives.",
+                        "[SH] The Five Standard Connectives:",
+                        "In mathematical logic, we primarily study five standard connectives:",
+                        "[L] 1. and (Conjunction)",
+                        "[L] 2. or (Disjunction)",
+                        "[L] 3. if...then (Conditional / Implication)",
+                        "[L] 4. if and only if (Biconditional / Double Implication)",
+                        "[L] 5. not (Negation)"
+                    ]
+                },
+                { 
+                    sentences: [
+                        "[H] 🧠 Professor Wadhwa's Intuitive Deep Dive:",
+                        "Think of Grammar class, but with strict Mathematical Rules! In English, conjunctions like \"and\", \"or\", and \"but\" are used to join two sentences.",
+                        "Think of Logical Connectives as Mathematical Superglue.",
+                        "If you have two separate, boring statements like \"It is raining\" and \"I will take an umbrella\", the logical connective is the superglue (\"If... then\") that bonds them into a single, powerful rule:",
+                        "\"If it is raining, then I will take an umbrella.\""
+                    ]
+                },
+                { 
+                    sentences: [
+                        "[H] 🚀 Professor Wadhwa's Application Approach:",
+                        "In the real world, Logical Connectives are the exact foundation of Computer Hardware & Search Engines!",
+                        "When hardware engineers design the microchips inside your smartphone, they use Logic Gates (AND gates, OR gates, NOT gates).",
+                        "These physical microscopic gates process electrical signals based purely on the mathematical rules of the logical connectives we are learning right now!",
+                        "Similarly, when you search Google for \"College AND Admissions NOT Engineering\", the search engine uses logical connectives to filter millions of results with exact precision."
+                    ]
+                },
+                { 
+                    sentences: [
+                        "[H] 📝 Professor Wadhwa's Comprehensive Examples:",
+                        "[SH] 3 Distinct Examples of Connectives in Action:",
+                        "[L] Example 1: \"3 is a prime number and 4 is a rational number.\"",
+                        "Analysis: Here, the connective 'and' acts as the bridge connecting two independent mathematical facts.",
+                        "[L] Example 2: \"All flowers are red or all cows are black.\"",
+                        "Analysis: The connective 'or' is used to present two alternative statements.",
+                        "[L] Example 3: \"Milk is white if and only if the Sun rises in the West.\"",
+                        "Analysis: The heavy-duty connective 'if and only if' creates a strict two-way dependency between the color of milk and the rising of the sun.",
+                        "[H] 📊 Professor Wadhwa's Deep Dive: The 5 Logical Connectives:",
+                        "Let us master the five specific connectives along with their strict mathematical symbols and fundamental truth behaviors.",
+                        "[SH] 1. Conjunction (AND)",
+                        "If two statements are combined using the connective 'and', then it is called a conjunction.",
+                        "If p, q are two statements, then 'p and q' is denoted by \\( p\\wedge q \\).",
+                        "Rule: The conjunction \\( p\\wedge q \\) is said to be true if and only if both p and q are true.",
+                        "[TABLE] p|q|p\\wedge q;;T|T|T;;T|F|F;;F|T|F;;F|F|F",
+                        "[SH] 2. Disjunction (OR)",
+                        "If two statements are combined by using the logical connective 'or', then it is called a disjunction.",
+                        "It is denoted by \\( p\\vee q \\) and read as 'p or q'.",
+                        "Rule: The disjunction \\( p\\vee q \\) is false if and only if both p and q are false. Otherwise, it is true!",
+                        "[TABLE] p|q|p\\vee q;;T|T|T;;T|F|T;;F|T|T;;F|F|F",
+                        "[SH] 3. Conditional / Implication (IF... THEN)",
+                        "If two statements are combined by using the connective 'if.... then', it is called a conditional or implication.",
+                        "It is denoted by \\( p\\rightarrow q \\) and read as 'p implies q'.",
+                        "Here p is called the hypothesis and q is called the conclusion.",
+                        "Rule: The conditional statement \\( p\\rightarrow q \\) is False only if p is true and q is false. In all other cases, it is true.",
+                        "[TABLE] p|q|p\\rightarrow q;;T|T|T;;T|F|F;;F|T|T;;F|F|T",
+                        "[SH] 4. Biconditional (IF AND ONLY IF)",
+                        "If two statements are combined using the logical connective 'if and only if', it is called a biconditional.",
+                        "It is denoted by \\( p\\leftrightarrow q \\) or \\( p\\Leftrightarrow q \\).",
+                        "Rule: The Biconditional statement \\( p\\leftrightarrow q \\) is true if p and q have the same truth values. Otherwise it is False.",
+                        "[TABLE] p|q|p\\leftrightarrow q;;T|T|T;;T|F|F;;F|T|F;;F|F|T",
+                        "[SH] 5. Negation (NOT)",
+                        "For any given statement p, there is another statement which is defined to be true when p is false, and false when p is true.",
+                        "This is called the negation of p and is denoted by \\( \\sim p \\).",
+                        "[TABLE] p|\\sim p;;T|F;;F|T",
+                        "[SH] Professor Wadhwa's Note:",
+                        "Negation of negation of a statement is the statement itself. That is, \\( \\sim(\\sim p)=p \\)."
+                    ]
+                },
+                { 
+                    sentences: [
+                        "[H] 🔥 Professor Wadhwa's Master Stroke:",
+                        "[SH] PRO TIP: Hidden Connective Keywords!",
+                        "Examiners love to test if you really understand connectives by using sneaky synonyms. Read carefully!",
+                        "[L] 1. The Hidden 'AND': In logic, the word 'but' acts exactly like 'and'.",
+                        "[L] For example: 'Delhi is in India but Dhaka is not in Srilanka.' Symbolic form: \\( p\\wedge\\sim q \\).",
+                        "[L] 2. The Sneaky Conditionals! Memorize this strictly. All the following perfectly translate to \\( p\\rightarrow q \\):",
+                        "[L] i) p is sufficient for q",
+                        "[L] ii) q is necessary for p (Most frequently missed by students!)",
+                        "[L] iii) p implies q",
+                        "[L] iv) q follows from p",
+                        "[L] v) p only if q"
+                    ]
+                }
+            ]
+        };
+
+        // --- States ---
+        let currentLessonIndex = 0;
+        let currentSentenceIndex = 0;
+        let isDarkMode = false;
+        
+        let ttsState = 'stopped'; 
+        let readMode = 'sentence';
+        let typeInterval;
+        let synth = window.speechSynthesis;
+        let currentUtterance = null;
+        let indianMaleVoice = null;
+
+        // Load Indian English male voice
+        function updateIndianVoice() {
+            const voices = window.speechSynthesis.getVoices();
+            indianMaleVoice = voices.find(v => v.lang === 'en-IN' && /male/i.test(v.name)) ||
+                              voices.find(v => v.lang.startsWith('en-IN') && /Ravi|male/i.test(v.name)) ||
+                              voices.find(v => v.lang.startsWith('en-IN')) ||
+                              voices.find(v => /en-IN/i.test(v.lang)) ||
+                              voices.find(v => /India|Indian/i.test(v.name));
+        }
+        window.speechSynthesis.onvoiceschanged = updateIndianVoice;
+        updateIndianVoice();
+        
+        let charIdx = 0;
+        let currentRawText = "";
+        let currentStyledHTML = "";
+        let currentSpan = null;
+        let typeSpeed = 35; 
+
+        let fullReadTimer = null;
+        let isLongPressFired = false;
+        let readTimerInterval = null;
+        let estimatedTotalSeconds = 0;
+        let currentTimerSeconds = 0;
+
+        // Start HTML Directly
+        window.onload = () => {
+            jumpToLesson(0, true);
+        };
+
+        function enforceFullScreen() {
+            if (!document.fullscreenElement && !document.mozFullScreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+                const docElm = document.documentElement;
+                if (docElm.requestFullscreen) { docElm.requestFullscreen().catch(()=>{}); } 
+                else if (docElm.webkitRequestFullscreen) { docElm.webkitRequestFullscreen().catch(()=>{}); }
+            }
+        }
+        
+        // Ensure fullscreen triggers upon user interaction without an overlay blocking the content.
+        document.body.addEventListener('click', enforceFullScreen, {once: false});
+        document.body.addEventListener('touchstart', enforceFullScreen, {once: false});
+
+        // Dropdown toggle logic for both menus
+        function toggleDropdown(e, menuId) {
+            e.stopPropagation();
+            const menu = document.getElementById(menuId);
+            menu.classList.toggle('active');
+        }
+
+        document.addEventListener('click', function(e) {
+            const menu1 = document.getElementById('dropdown-menu');
+            const menu2 = document.getElementById('subtopic-dropdown');
+            if (menu1 && menu1.classList.contains('active') && !e.target.closest('#global-menu-btn')) {
+                menu1.classList.remove('active');
+            }
+            if (menu2 && menu2.classList.contains('active') && !e.target.closest('#subtopic-menu-btn')) {
+                menu2.classList.remove('active');
+            }
+        });
+
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark-mode');
+            document.getElementById('theme-text').innerText = isDarkMode ? "Light Mode" : "Dark Mode";
+            document.getElementById('dropdown-menu').classList.remove('active');
+        }
+
+        function exitSubtopic() {
+            document.getElementById('dropdown-menu').classList.remove('active');
+            stopReadingFull();
+            // Try to close the window/tab - works when opened via window.open
+            try {
+                window.close();
+            } catch(e) {}
+            // Fallback: navigate back or to blank page
+            setTimeout(() => {
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.href = 'about:blank';
+                }
+            }, 100);
+        }
+        
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        function getNextIndex() {
+            let maxLen = subtopicData.lessons.length - 1;
+            if(currentLessonIndex < maxLen) return currentLessonIndex + 1;
+            if(currentLessonIndex === maxLen) return maxLen + 1; // summary
+            return maxLen + 1;
+        }
+
+        function getPrevIndex() {
+            if(currentLessonIndex === 0) return 0;
+            if(currentLessonIndex === subtopicData.lessons.length) return subtopicData.lessons.length - 1; // from summary back to last lesson
+            return currentLessonIndex - 1;
+        }
+
+        function initTimer() {
+            let sentences = subtopicData.lessons[currentLessonIndex].sentences;
+            let totalSeconds = 0;
+            const rate = 0.95;
+            const baseWPM = 140;
+            const typeSpeedSec = 0.035;
+            const gapSec = 0.3;
+
+            sentences.forEach(raw => {
+                let speechText = getSpeechText(raw);
+                let words = speechText.split(/\s+/).filter(w => w.length > 0).length;
+                let speechTime = (words / (baseWPM * rate)) * 60;
+                let typingTime = raw.length * typeSpeedSec;
+                totalSeconds += Math.max(speechTime, typingTime) + gapSec;
+            });
+            
+            totalSeconds = Math.max(totalSeconds - gapSec, 1);
+            estimatedTotalSeconds = Math.ceil(totalSeconds);
+            currentTimerSeconds = estimatedTotalSeconds;
+            
+            updateTimerUI();
+        }
+
+        function startTimer() {
+            if (readTimerInterval) clearInterval(readTimerInterval);
+            let timerEl = document.getElementById('academic-timer');
+            if (timerEl) timerEl.classList.add('active');
+            readTimerInterval = setInterval(() => {
+                if (currentTimerSeconds > 0) {
+                    currentTimerSeconds--;
+                    updateTimerUI();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            if (readTimerInterval) { clearInterval(readTimerInterval); readTimerInterval = null; }
+            let timerEl = document.getElementById('academic-timer');
+            if (timerEl) timerEl.classList.remove('active');
+        }
+
+        function resetTimer() {
+            currentTimerSeconds = estimatedTotalSeconds;
+            updateTimerUI();
+            let timerEl = document.getElementById('academic-timer');
+            if (timerEl) timerEl.classList.remove('active');
+        }
+
+        function updateTimerUI() {
+            let remainingSeconds = currentTimerSeconds;
+            if (isNaN(remainingSeconds) || remainingSeconds < 0) remainingSeconds = 0;
+            let minutes = Math.floor(remainingSeconds / 60);
+            let seconds = Math.floor(remainingSeconds % 60);
+            let display = String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+            document.getElementById('timer-display').textContent = display;
+        }
+
+        function jumpToLesson(index, skipDuster = false) {
+            stopReadingFull();
+            
+            // FEATURE 4: Handle summary screen
+            if(index === subtopicData.lessons.length) {
+                currentLessonIndex = index;
+                document.getElementById('board-area').style.display = 'none';
+                document.getElementById('summary-screen').style.display = 'block';
+                document.getElementById('st-subtitle-text').innerText = 'Summary for Students';
+                document.getElementById('choice-box').style.display = 'none';
+                document.getElementById('lesson-controls').style.display = 'none'; // hide Non Stop/Play/By Sentence
+                renderSummaryNav();
+                return;
+            }
+            
+            if(index > subtopicData.lessons.length) return;
+            
+            // Hide summary if coming back from it
+            document.getElementById('summary-screen').style.display = 'none';
+            document.getElementById('board-area').style.display = 'block';
+            document.getElementById('lesson-controls').style.display = 'flex'; // restore controls
+            
+            currentLessonIndex = index;
+            
+            document.getElementById('st-subtitle-text').innerText = subtopicData.lessonTitles[index];
+            document.getElementById('choice-box').style.display = 'none';
+            
+            if(document.getElementById('board-text')) {
+                 document.getElementById('board-text').classList.remove('reading-done');
+            }
+            
+            initTimer(); 
+
+            if (skipDuster) {
+                document.getElementById('board-text').innerHTML = "";
+                currentSentenceIndex = 0;
+                resetPlayButton();
+            } else {
+                const duster = document.getElementById('duster');
+                duster.classList.add('active');
+                setTimeout(() => { document.getElementById('board-text').innerHTML = ""; }, 500); 
+                setTimeout(() => {
+                    duster.classList.remove('active');
+                    currentSentenceIndex = 0;
+                    resetPlayButton();
+                }, 1000);
+            }
+        }
+
+        function startFullReadPress(e) {
+            if(fullReadTimer) clearTimeout(fullReadTimer);
+            isLongPressFired = false;
+            fullReadTimer = setTimeout(() => {
+                isLongPressFired = true;
+                displayFullContentImmediate();
+            }, 2000);
+        }
+
+        function cancelFullReadPress(e) { if(fullReadTimer) clearTimeout(fullReadTimer); }
+
+        function setReadMode(mode) {
+            if(isLongPressFired && mode === 'full') { isLongPressFired = false; return; }
+            readMode = mode;
+            document.getElementById('mode-full').classList.remove('active');
+            document.getElementById('mode-sentence').classList.remove('active');
+            document.getElementById(`mode-${mode}`).classList.add('active');
+            stopReadingFull();
+        }
+
+        function displayFullContentImmediate() {
+            stopReadingFull();
+            pauseTimer();
+            resetTimer(); 
+
+            let lesson = subtopicData.lessons[currentLessonIndex];
+            let board = document.getElementById('board-text');
+            board.innerHTML = "";
+            let fullHTML = "";
+            
+            for(let i=0; i<lesson.sentences.length; i++) {
+                let raw = lesson.sentences[i];
+                let isHeading = raw.startsWith("[H]");
+                let isSub = raw.startsWith("[SH]");
+                let isList = raw.startsWith("[L]");
+                let isTable = raw.startsWith("[TABLE]");
+                
+                let tag = (isHeading || isSub || isList || isTable) ? 'div' : 'span';
+                let className = "";
+                if (isHeading) className = "lesson-heading";
+                else if (isSub) className = "lesson-subheading";
+                else if (isList) className = "list-item";
+                
+                let style = (isHeading && i > 0) ? 'margin-top: 30px;' : '';
+                let contentHTML = "";
+                
+                if (isTable) {
+                    let tableData = raw.replace(/^\[TABLE\]\s*/, "").trim();
+                    let rows = tableData.split(";;");
+                    let headers = rows[0].split("|");
+                    
+                    contentHTML = '<div class="table-container"><table class="academic-table"><thead><tr>';
+                    headers.forEach(h => contentHTML += `<th>\\(${h}\\)</th>`);
+                    contentHTML += '</tr></thead><tbody>';
+                    for(let r=1; r<rows.length; r++) {
+                        let cols = rows[r].split("|");
+                        contentHTML += '<tr>';
+                        cols.forEach(c => contentHTML += `<td>\\(${c}\\)</td>`);
+                        contentHTML += '</tr>';
+                    }
+                    contentHTML += '</tbody></table></div>';
+                } else {
+                    let textRaw = raw.replace(/^\[H\]\s*|^\[SH\]\s*|^\[L\]\s*/, "");
+                    contentHTML = textRaw
+                        .replace(/Logic/gi, "<span class='hl-orange'>Logic</span>")
+                        .replace(/True/g, "<span class='hl-green'>True</span>")
+                        .replace(/False/g, "<span class='hl-blue'>False</span>")
+                        .replace(/Statement/gi, "<span class='hl-orange'>Statement</span>");
+                    if (!isTable && !isHeading && !isSub && !isList) {
+                        contentHTML = " " + contentHTML;
+                    }
+                }
+                fullHTML += `<${tag} class="${className}" style="${style}">${contentHTML}</${tag}>`;
+            }
+            
+            board.innerHTML = fullHTML;
+            if (window.MathJax && fullHTML.includes('\\(')) {
+                MathJax.typesetPromise([board]).then(()=>{}).catch((err) => console.log(err));
+            }
+            currentSentenceIndex = lesson.sentences.length;
+            finishLessonBlock();
+        }
+
+        function getSpeechText(text) {
+            if (text.includes("[TABLE]")) return "Professor Wadhwa's Truth Table is displayed on the board.";
+            let stripped = text.replace(/\[H\]|\[SH\]|\[L\]/g, "");
+            stripped = stripped.replace(/<[^>]+>/gm, ''); 
+            stripped = stripped.replace(/[\u{1F300}-\u{1F9FF}\u{2700}-\u{27BF}\u{2600}-\u{26FF}\u{1FA00}-\u{1FAFF}]/gu, ''); 
+            stripped = stripped.replace(/\\leftrightarrow/gi, ' Double Implication ');
+            stripped = stripped.replace(/\\Leftrightarrow/gi, ' Double Implication ');
+            stripped = stripped.replace(/↔/g, ' Double Implication ');
+            stripped = stripped.replace(/\\le/g, ' less than or equal to ');
+            stripped = stripped.replace(/\\ge/g, ' greater than or equal to ');
+            stripped = stripped.replace(/≤/g, ' less than or equal to ');
+            stripped = stripped.replace(/≥/g, ' greater than or equal to ');
+            stripped = stripped.replace(/</g, ' less than ');
+            stripped = stripped.replace(/>/g, ' greater than ');
+            stripped = stripped.replace(/\\equiv/g, ' equivalent to ');
+            stripped = stripped.replace(/≡/g, ' equivalent to ');
+            stripped = stripped.replace(/\\times/g, ' multiplied by ');
+            stripped = stripped.replace(/\\wedge/g, ' And ');
+            stripped = stripped.replace(/\\vee/g, ' or ');
+            stripped = stripped.replace(/\\rightarrow/g, ' implies ');
+            stripped = stripped.replace(/\\sim/g, ' Negation ');
+            stripped = stripped.replace(/∧/g, ' And ');
+            stripped = stripped.replace(/∨/g, ' or ');
+            stripped = stripped.replace(/→/g, ' implies ');
+            stripped = stripped.replace(/~/g, ' Negation ');
+            stripped = stripped.replace(/\\\(/g, '').replace(/\\\)/g, '');
+            stripped = stripped.replace(/\bOR\b/g, ' or ');
+            stripped = stripped.replace(/≠/g, ' NOT EQUAL TO ');
+            stripped = stripped.replace(/\\neq/g, ' NOT EQUAL TO ');
+            stripped = stripped.replace(/\(/g, ' bracket start ');
+            stripped = stripped.replace(/\)/g, ' bracket close ');
+            return stripped;
+        }
+
+        function toggleReading() {
+            // FEATURE 4: disable audio on summary screen
+            if(currentLessonIndex >= subtopicData.lessons.length) return;
+            
+            if (ttsState === 'playing') {
+                pauseReading();
+            } else if (ttsState === 'paused') {
+                resumeReading();
+            } else {
+                // If at end, restart current lesson (REPLAY FIX)
+                if(currentSentenceIndex >= subtopicData.lessons[currentLessonIndex].sentences.length) {
+                    jumpToLesson(currentLessonIndex, true);
+                } else {
+                    startSentencePlayback();
+                }
+            }
+        }
+
+        function pauseReading() {
+            ttsState = 'paused';
+            clearInterval(typeInterval);
+            window.speechSynthesis.cancel(); 
+            pauseTimer();
+            let btn = document.getElementById('btn-read-action');
+            btn.innerHTML = '<i class="fa-solid fa-play"></i> Resume';
+            btn.classList.add('btn-breathe');
+        }
+
+        function resumeReading() {
+            ttsState = 'playing';
+            let btn = document.getElementById('btn-read-action');
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg> Pause';
+            btn.classList.remove('btn-breathe');
+            
+            let remainingRaw = currentRawText.substring(charIdx);
+            let speechText = getSpeechText(remainingRaw);
+            
+            if (speechText.trim().length > 0) {
+                currentUtterance = new SpeechSynthesisUtterance(speechText);
+                currentUtterance.rate = 0.95; 
+                currentUtterance.lang = 'en-IN';
+                if (indianMaleVoice) currentUtterance.voice = indianMaleVoice;
+                currentUtterance.onend = () => { handleSentenceEnd(); };
+                window.speechSynthesis.speak(currentUtterance);
+            } else {
+                setTimeout(handleSentenceEnd, 100);
+            }
+            typeInterval = setInterval(typeWriterStep, typeSpeed);
+            startTimer();
+        }
+
+        function stopReadingFull() {
+            ttsState = 'stopped';
+            clearInterval(typeInterval);
+            window.speechSynthesis.cancel();
+            pauseTimer();
+            resetPlayButton();
+        }
+
+        function resetPlayButton() {
+            let btn = document.getElementById('btn-read-action');
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play';
+            btn.classList.remove('btn-breathe');
+        }
+
+        function startSentencePlayback() {
+            if(currentSentenceIndex >= subtopicData.lessons[currentLessonIndex].sentences.length) {
+                finishLessonBlock();
+                return;
+            }
+
+            ttsState = 'playing';
+            let btn = document.getElementById('btn-read-action');
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg> Pause';
+            btn.classList.remove('btn-breathe');
+
+            window.speechSynthesis.cancel(); 
+
+            let raw = subtopicData.lessons[currentLessonIndex].sentences[currentSentenceIndex];
+            let isHeading = raw.startsWith("[H]");
+            let isSub = raw.startsWith("[SH]");
+            let isList = raw.startsWith("[L]");
+            let isTable = raw.startsWith("[TABLE]");
+
+            let board = document.getElementById('board-text');
+            currentSpan = document.createElement((isHeading || isSub || isList || isTable) ? 'div' : 'span');
+            
+            if (isHeading) {
+                currentSpan.className = 'lesson-heading';
+                if (currentSentenceIndex > 0) currentSpan.style.marginTop = "30px";
+            } else if (isSub) {
+                currentSpan.className = 'lesson-subheading';
+            } else if (isList) {
+                currentSpan.className = 'list-item';
+            } else if (!isTable) {
+                board.appendChild(document.createTextNode(" "));
+            }
+
+            if (isTable) {
+                let tableData = raw.replace(/^\[TABLE\]\s*/, "").trim();
+                let rows = tableData.split(";;");
+                let headers = rows[0].split("|");
+                let html = '<div class="table-container"><table class="academic-table"><thead><tr>';
+                headers.forEach(h => html += `<th>\\(${h}\\)</th>`);
+                html += '</tr></thead><tbody>';
+                for(let i=1; i<rows.length; i++) {
+                    let cols = rows[i].split("|");
+                    html += '<tr>';
+                    cols.forEach(c => html += `<td>\\(${c}\\)</td>`);
+                    html += '</tr>';
+                }
+                html += '</tbody></table></div>';
+                currentStyledHTML = html;
+                currentRawText = ""; 
+            } else {
+                currentRawText = raw.replace(/^\[H\]\s*|^\[SH\]\s*|^\[L\]\s*/, "");
+                currentStyledHTML = currentRawText
+                .replace(/Logic/gi, "<span class='hl-orange'>Logic</span>")
+                .replace(/True/g, "<span class='hl-green'>True</span>")
+                .replace(/False/g, "<span class='hl-blue'>False</span>")
+                .replace(/Statement/gi, "<span class='hl-orange'>Statement</span>");
+            }
+            
+            let speechText = getSpeechText(raw);
+            board.appendChild(currentSpan);
+
+            charIdx = 0;
+            typeInterval = setInterval(typeWriterStep, typeSpeed);
+            startTimer();
+
+            setTimeout(() => {
+                if (ttsState !== 'playing') return;
+                currentUtterance = new SpeechSynthesisUtterance(speechText);
+                currentUtterance.rate = 0.95; 
+                currentUtterance.lang = 'en-IN';
+                if (indianMaleVoice) currentUtterance.voice = indianMaleVoice;
+                currentUtterance.onend = () => { handleSentenceEnd(); };
+                window.speechSynthesis.speak(currentUtterance);
+            }, 300); 
+        }
+
+        function handleSentenceEnd() {
+            currentSentenceIndex++;
+            if(readMode === 'full') {
+                if(ttsState === 'playing') {
+                    setTimeout(() => { if(ttsState === 'playing') startSentencePlayback(); }, 300);
+                }
+            } else {
+                ttsState = 'stopped';
+                let btn = document.getElementById('btn-read-action');
+                btn.innerHTML = '<i class="fa-solid fa-play"></i> Read Next';
+                btn.classList.add('btn-breathe');
+                pauseTimer();
+                if(currentSentenceIndex >= subtopicData.lessons[currentLessonIndex].sentences.length) {
+                    finishLessonBlock();
+                }
+            }
+        }
+
+        function typeWriterStep() {
+            if (charIdx < currentRawText.length) {
+                currentSpan.innerText = currentRawText.substring(0, charIdx + 1); 
+                charIdx++;
+                document.getElementById('board-area').scrollTop = document.getElementById('board-area').scrollHeight;
+            } else {
+                clearInterval(typeInterval);
+                currentSpan.innerHTML = currentStyledHTML; 
+                if (window.MathJax && currentStyledHTML.includes('\\(')) {
+                    MathJax.typesetPromise([currentSpan]).catch((err) => console.log(err));
+                }
+                document.getElementById('board-area').scrollTop = document.getElementById('board-area').scrollHeight;
+            }
+        }
+
+        function renderDynamicNavChoices() {
+            let box = document.getElementById('choice-box');
+            box.innerHTML = ''; 
+
+            let prevDisabled = (currentLessonIndex === 0) ? 'disabled' : '';
+            let btnPrev = `<button class="drop-btn nav-btn" style="flex:1; background: linear-gradient(135deg, #FF416C, #FF4B2B);" onclick="jumpToLesson(${getPrevIndex()})" ${prevDisabled}> <i class="fa-solid fa-backward"></i> Previous</button>`;
+            
+            let btnNext = "";
+            if (currentLessonIndex === subtopicData.lessons.length - 1) {
+                // FEATURE 4: Go to summary instead of ending
+                btnNext = `<button class="drop-btn nav-btn" style="flex:1; background: linear-gradient(135deg, #11998e, #38ef7d);" onclick="jumpToLesson(${getNextIndex()})">Summary <i class="fa-solid fa-forward"></i></button>`;
+            } else {
+                btnNext = `<button class="drop-btn nav-btn" style="flex:1; background: linear-gradient(135deg, #11998e, #38ef7d);" onclick="jumpToLesson(${getNextIndex()})">Next <i class="fa-solid fa-forward"></i></button>`;
+            }
+
+            box.innerHTML = `<div style="display:flex; gap:10px; width:100%; margin-top: 10px;">${btnPrev}${btnNext}</div>`;
+            box.style.display = 'flex';
+        }
+
+        // FEATURE 4: Render navigation for summary screen
+        function renderSummaryNav() {
+            let box = document.getElementById('summary-nav');
+            box.innerHTML = '';
+            let btnPrev = `<button class="drop-btn nav-btn" style="flex:1; background: linear-gradient(135deg, #FF416C, #FF4B2B);" onclick="jumpToLesson(${getPrevIndex()})"> <i class="fa-solid fa-backward"></i> Back to Lessons</button>`;
+            let btnNext = `<button class="drop-btn nav-btn" style="flex:1; background: var(--text-muted);" disabled>Completed <i class="fa-solid fa-check-double"></i></button>`;
+            box.innerHTML = `<div style="display:flex; gap:10px; width:100%;">${btnPrev}${btnNext}</div>`;
+        }
+
+        function finishLessonBlock() {
+            stopReadingFull();
+            pauseTimer();
+            currentTimerSeconds = 0; 
+            updateTimerUI();
+            
+            document.getElementById('btn-read-action').innerHTML = '<i class="fa-solid fa-rotate-left"></i> Replay';
+            document.getElementById('board-text').classList.add('reading-done');
+
+            renderDynamicNavChoices();
+            setTimeout(() => { document.getElementById('board-area').scrollTop = document.getElementById('board-area').scrollHeight; }, 100);
+        }
+    </script>
+</body>
+</html>

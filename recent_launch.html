@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recent Launches — Wadhwa Sir's Classroom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0d1b2a;
+  --gold:#D4AF37;
+  --gold-light:#F4E4A6;
+}
+:root[data-theme="dark"] {
+  --bg:#050a11;
+  --bg2:#0a1422;
+  --text:#e8eef6;
+  --text-muted:#9db0c5;
+  --card:rgba(16,27,42,0.62);
+  --card-border:rgba(212,175,55,0.28);
+  --item:rgba(255,255,255,0.045);
+  --shadow:0 24px 60px rgba(0,0,0,0.55);
+}
+:root[data-theme="light"] {
+  --bg:#fbf7ec;
+  --bg2:#fffdf7;
+  --text:#0d1b2a;
+  --text-muted:#5b6b7c;
+  --card:rgba(255,255,255,0.72);
+  --card-border:rgba(212,175,55,0.38);
+  --item:rgba(13,27,42,0.05);
+  --shadow:0 24px 50px rgba(13,27,42,0.12);
+}
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; }
+body {
+  margin:0;
+  font-family:"Poppins",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+body::before {
+  content:"";
+  position:fixed; inset:0; z-index:-2;
+  background:
+    radial-gradient(1000px 700px at 80% -10%, rgba(212,175,55,0.12), transparent 60%),
+    radial-gradient(800px 600px at 10% 110%, rgba(13,27,42,0.8), transparent 60%),
+    linear-gradient(180deg, var(--bg2), var(--bg));
+}
+.bg-orbs { position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none; }
+.orb {
+  position:absolute; width:420px; height:420px; border-radius:50%;
+  filter:blur(90px); opacity:0.55; will-change:transform;
+}
+.o1 { background:radial-gradient(circle at 30% 30%, var(--gold), transparent 60%); top:-120px; left:-120px; animation:float1 22s ease-in-out infinite; }
+.o2 { background:radial-gradient(circle at 70% 70%, #1e3a5f, transparent 60%); bottom:-160px; right:-100px; animation:float2 26s ease-in-out infinite; }
+.o3 { background:radial-gradient(circle at 50% 50%, rgba(244,228,166,0.6), transparent 60%); top:40%; left:60%; width:300px; height:300px; animation:float3 28s ease-in-out infinite; }
+@keyframes float1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(40px,60px) scale(1.08)} }
+@keyframes float2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-50px,-40px) scale(0.95)} }
+@keyframes float3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(30px,-50px)} }
+
+.nav {
+  position:sticky; top:0; z-index:50;
+  display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px;
+  padding:14px max(16px, env(safe-area-inset-left)) 14px max(16px, env(safe-area-inset-right));
+  background:color-mix(in oklab, var(--card) 82%, transparent);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--card-border);
+}
+.back-btn {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:10px 14px; border-radius:999px;
+  background:var(--item); border:1px solid var(--card-border);
+  color:var(--text); text-decoration:none; font-weight:500; font-size:0.95rem;
+  transition:transform .15s ease, border-color .2s;
+}
+.back-btn:hover { transform:translateY(-1px); border-color:rgba(212,175,55,0.6); }
+.back-btn:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+.page-title {
+  margin:0; text-align:center; font-weight:700; letter-spacing:.14em;
+  font-size:clamp(1rem, 2.2vw, 1.25rem);
+  background:linear-gradient(90deg, var(--text), var(--gold-light) 60%, var(--gold));
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.theme-toggle {
+  width:44px; height:44px; display:grid; place-items:center;
+  border-radius:50%; border:1px solid var(--card-border);
+  background:var(--item); color:var(--gold); cursor:pointer;
+  transition:transform .15s;
+}
+.theme-toggle:active { transform:scale(.96); }
+.theme-toggle .icon-moon { display:none; }
+[data-theme="light"] .theme-toggle .icon-sun { display:none; }
+[data-theme="light"] .theme-toggle .icon-moon { display:block; }
+
+.container { max-width:1200px; margin:0 auto; padding:28px 16px 80px; }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:26px; margin-top:10px; }
+@media (max-width:920px){ .grid{ grid-template-columns:1fr; gap:20px; } }
+
+.card-3d {
+  position:relative; border-radius:28px;
+  background:var(--card); border:1px solid var(--card-border);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 24px rgba(212,175,55,0.06);
+  overflow:hidden; transform-style:preserve-3d;
+  transition:transform .25s ease, box-shadow .25s ease;
+}
+.card-3d::before {
+  content:""; position:absolute; inset:-2px; border-radius:inherit; z-index:0;
+  background:conic-gradient(from 0deg, transparent 0deg, rgba(212,175,55,0.9) 70deg, transparent 120deg, transparent 360deg);
+  filter:blur(10px); opacity:.28; animation:spin 8s linear infinite;
+}
+@keyframes spin { to{ transform:rotate(360deg); } }
+.card-glow {
+  position:absolute; inset:0; z-index:1; pointer-events:none;
+  background:radial-gradient(500px circle at var(--mx,50%) var(--my,50%), rgba(212,175,55,0.18), transparent 45%);
+  opacity:0; transition:opacity .2s;
+}
+.card-inner { position:relative; z-index:2; }
+
+.card-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:20px 22px; border-bottom:1px solid rgba(212,175,55,0.14);
+  background:linear-gradient(180deg, rgba(255,255,255,0.06), transparent);
+}
+.card-title { display:flex; align-items:center; gap:10px; }
+.card-title h2 { margin:0; font-size:1.05rem; letter-spacing:.04em; font-weight:600; }
+.title-icon {
+  width:36px; height:36px; display:grid; place-items:center; border-radius:12px;
+  background:linear-gradient(145deg, rgba(212,175,55,0.22), rgba(212,175,55,0.06));
+  border:1px solid rgba(212,175,55,0.32); color:var(--gold);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.2), 0 6px 16px rgba(212,175,55,0.18);
+}
+.live {
+  display:flex; align-items:center; gap:6px; font-size:.75rem; color:var(--text-muted);
+  background:var(--item); border:1px solid var(--card-border); padding:6px 10px; border-radius:999px;
+}
+.dot { width:8px; height:8px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 0 rgba(34,197,94,0.7); animation:pulse 2s infinite; }
+.live.upcoming .dot { background:#f59e0b; box-shadow:0 0 0 0 rgba(245,158,11,0.7); }
+@keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,0.6)} 70%{box-shadow:0 0 0 8px transparent} 100%{box-shadow:0 0 0 0 transparent} }
+
+.viewport {
+  position:relative; height:320px; overflow:hidden;
+  padding:14px 18px 18px;
+  mask-image:linear-gradient(to bottom, transparent, black 22px, black calc(100% - 22px), transparent);
+  -webkit-mask-image:linear-gradient(to bottom, transparent, black 22px, black calc(100% - 22px), transparent);
+}
+@media (max-width:920px){ .viewport{ height:300px; } }
+.scroll-track {
+  display:flex; flex-direction:column; gap:14px; padding:6px 4px 6px;
+  will-change:transform; animation:scrollUp linear infinite;
+}
+.viewport:hover .scroll-track { animation-play-state:paused; }
+
+@keyframes scrollUp { from{ transform:translateY(0) } to{ transform:translateY(-50%) } }
+
+.launch-item {
+  position:relative; display:flex; align-items:center; gap:14px;
+  padding:16px 18px 16px 20px; min-height:58px;
+  background:var(--item); border:1px solid var(--card-border); border-radius:18px;
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  box-shadow:0 6px 18px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06);
+  transition:transform .18s ease, border-color .18s, box-shadow .18s;
+  transform:translateZ(0);
+}
+.launch-item::before {
+  content:""; position:absolute; left:0; top:8px; bottom:8px; width:4px; border-radius:0 4px 4px 0;
+  background:linear-gradient(180deg, var(--gold), var(--gold-light));
+  box-shadow:0 0 14px rgba(212,175,55,0.45);
+}
+.launch-item:hover { transform:translateY(-2px); border-color:rgba(212,175,55,0.55); box-shadow:0 10px 26px rgba(0,0,0,0.24), 0 0 20px rgba(212,175,55,0.14); }
+.item-icon {
+  width:36px; height:36px; flex:0 0 36px; display:grid; place-items:center; border-radius:11px;
+  background:linear-gradient(145deg, rgba(212,175,55,0.18), rgba(212,175,55,0.05));
+  border:1px solid rgba(212,175,55,0.28); font-size:1.05rem;
+}
+.item-text { font-weight:500; letter-spacing:.01em; line-height:1.3; }
+
+.note-panel {
+  margin:42px auto 0; max-width:920px; text-align:center;
+  padding:26px 22px; background:var(--card); border:1px solid var(--card-border);
+  border-radius:24px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.note-panel p { margin:0 0 16px; color:var(--text-muted); line-height:1.65; font-size:.97rem; }
+.feedback-btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  padding:14px 26px; font-weight:700; font-size:1rem; letter-spacing:.02em;
+  color:#0d1b2a; text-decoration:none; border-radius:14px; position:relative; overflow:hidden;
+  background:linear-gradient(180deg, var(--gold-light), var(--gold));
+  border:1px solid rgba(0,0,0,0.08);
+  box-shadow:0 12px 28px rgba(212,175,55,0.32), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -3px 8px rgba(0,0,0,0.18);
+  transform:perspective(800px) translateZ(0); transition:transform .15s ease, box-shadow .15s;
+}
+.feedback-btn::after {
+  content:""; position:absolute; inset:0; background:linear-gradient(110deg, transparent 20%, rgba(255,255,255,0.5) 50%, transparent 80%);
+  transform:translateX(-120%); transition:transform .6s ease;
+}
+.feedback-btn:hover { transform:perspective(800px) translateY(-2px) translateZ(8px); box-shadow:0 18px 36px rgba(212,175,55,0.4); }
+.feedback-btn:hover::after { transform:translateX(120%); }
+.feedback-btn:active { transform:perspective(800px) translateY(0) scale(.98); }
+.feedback-btn:focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
+
+.to-top {
+  position:fixed; right:18px; bottom:18px; width:52px; height:52px; border-radius:50%;
+  display:grid; place-items:center; font-size:1.3rem; cursor:pointer; z-index:60;
+  background:var(--card); color:var(--gold); border:1px solid var(--card-border);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  box-shadow:var(--shadow); opacity:0; pointer-events:none; transform:translateY(16px);
+  transition:opacity .2s, transform .2s;
+}
+.to-top.visible { opacity:1; pointer-events:auto; transform:translateY(0); }
+.to-top:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+
+@media (prefers-reduced-motion:reduce){
+  .orb, .card-3d::before, .scroll-track { animation:none !important; }
+}
+</style>
+</head>
+<body>
+<div class="bg-orbs" aria-hidden="true">
+  <div class="orb o1"></div>
+  <div class="orb o2"></div>
+  <div class="orb o3"></div>
+</div>
+
+<header class="nav" role="banner">
+  <a href="index.html" class="back-btn" aria-label="Back to Home" onclick="if(history.length>1){history.back();return false;}"><span aria-hidden="true">←</span> Home</a>
+  <h1 class="page-title">RECENT LAUNCHES</h1>
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
+    <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+    <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+</header>
+
+<main class="container">
+  <div class="grid">
+    <!-- LEFT CARD -->
+    <article class="card-3d" data-tilt aria-labelledby="recent-title">
+      <div class="card-glow"></div>
+      <div class="card-inner">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="title-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 0 22 2c0 2.72-.78 7.5-6 11a22 22 0 0 1-3.95 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+            </div>
+            <h2 id="recent-title">RECENT LAUNCHES</h2>
+          </div>
+          <div class="live" aria-label="Live updates"><span class="dot"></span><span>Live</span></div>
+        </div>
+        <div class="viewport" id="recent-viewport" aria-label="Recent launches auto-scrolling list">
+          <div class="scroll-track" id="recent-track" role="list">
+            <!-- EDIT RECENT LAUNCHES BELOW -->
+            <div class="launch-item" role="listitem"><div class="item-icon" aria-hidden="true">🚀</div><span class="item-text">What After SSC</span></div>
+            <div class="launch-item" role="listitem"><div class="item-icon" aria-hidden="true">🚀</div><span class="item-text">What After HSC</span></div>
+            <div class="launch-item" role="listitem"><div class="item-icon" aria-hidden="true">🚀</div><span class="item-text">12th Science Maths1 logic partially</span></div>
+            <!-- EDIT RECENT LAUNCHES ABOVE -->
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- RIGHT CARD -->
+    <article class="card-3d" data-tilt aria-labelledby="upcoming-title">
+      <div class="card-glow"></div>
+      <div class="card-inner">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="title-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            </div>
+            <h2 id="upcoming-title">UPCOMING</h2>
+          </div>
+          <div class="live upcoming" aria-label="Coming soon"><span class="dot"></span><span>Soon</span></div>
+        </div>
+        <div class="viewport" id="upcoming-viewport" aria-label="Upcoming launches auto-scrolling list">
+          <div class="scroll-track" id="upcoming-track" role="list">
+            <!-- EDIT UPCOMING BELOW -->
+            <div class="launch-item" role="listitem"><div class="item-icon" aria-hidden="true">⏳</div><span class="item-text">12th Science Maths1 logic FULLY</span></div>
+            <div class="launch-item" role="listitem"><div class="item-icon" aria-hidden="true">⏳</div><span class="item-text">12th Science Maths2 DIFFERENTIATION</span></div>
+            <!-- EDIT UPCOMING ABOVE -->
+          </div>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <section class="note-panel" aria-labelledby="note">
+    <p id="note">Note: You can send feedback using feedback Button for the chapter of any course you required to be launch in upcoming update.</p>
+    <a class="feedback-btn" href="mailto:wadhwasircet@gmail.com?subject=Course%20Request%20-%202026%20Launches" aria-label="Send feedback via email">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="m22 6-10 7L2 6"/></svg>
+      Feedback
+    </a>
+  </section>
+</main>
+
+<button id="toTop" class="to-top" aria-label="Scroll to top">↑</button>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const saved = localStorage.getItem('wsc-theme');
+  root.setAttribute('data-theme', saved || 'dark');
+  toggle.addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('wsc-theme', next);
+  });
+
+  // 3D tilt (desktop only)
+  const canTilt = window.matchMedia('(hover:hover) and (pointer:fine)').matches;
+  if (canTilt) {
+    document.querySelectorAll('[data-tilt]').forEach(card => {
+      const glow = card.querySelector('.card-glow');
+      card.addEventListener('mousemove', e => {
+        const r = card.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width;
+        const y = (e.clientY - r.top) / r.height;
+        const rx = (0.5 - y) * 6;
+        const ry = (x - 0.5) * 6;
+        card.style.transform = `perspective(1000px) rotateX(${rx}deg) rotateY(${ry}deg)`;
+        if (glow) { card.style.setProperty('--mx', `${x*100}%`); card.style.setProperty('--my', `${y*100}%`); glow.style.opacity = '1'; }
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0)';
+        if (glow) glow.style.opacity = '0';
+      });
+    });
+  }
+
+  // Seamless auto-scroll setup
+  function setupScroll(trackId, viewportId){
+    const track = document.getElementById(trackId);
+    const viewport = document.getElementById(viewportId);
+    if(!track || !viewport) return;
+    const originalHTML = track.innerHTML;
+    // Duplicate for loop
+    track.innerHTML = originalHTML + originalHTML;
+    // Ensure enough height for smooth loop
+    const checkHeight = () => {
+      if (track.scrollHeight < viewport.clientHeight * 2.2) {
+        track.innerHTML += originalHTML;
+        requestAnimationFrame(checkHeight);
+      } else {
+        const h = track.scrollHeight / 2;
+        const speed = 30; // px per second
+        const duration = Math.max(12, h / speed);
+        track.style.animationDuration = duration + 's';
+      }
+    };
+    requestAnimationFrame(checkHeight);
+
+    const pause = () => track.style.animationPlayState = 'paused';
+    const play = () => track.style.animationPlayState = 'running';
+    viewport.addEventListener('mouseenter', pause);
+    viewport.addEventListener('mouseleave', play);
+    viewport.addEventListener('touchstart', pause, {passive:true});
+    viewport.addEventListener('touchend', play);
+    viewport.addEventListener('touchcancel', play);
+  }
+  setupScroll('recent-track','recent-viewport');
+  setupScroll('upcoming-track','upcoming-viewport');
+
+  // Scroll to top
+  const toTop = document.getElementById('toTop');
+  const onScroll = () => {
+    if (window.scrollY > 300) toTop.classList.add('visible');
+    else toTop.classList.remove('visible');
+  };
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+  toTop.addEventListener('click', () => window.scrollTo({top:0, behavior:'smooth'}));
+})();
+</script>
+<!-- FEEDBACK MODAL 2026 - 3D Glass UI -->
+<div id="wsc-feedback-overlay" style="position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;background:rgba(5,12,22,0.78);backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3);opacity:0;transition:opacity .35s ease;padding:20px;box-sizing:border-box">
+  <div id="wsc-feedback-card" style="position:relative;width:min(94vw,760px);height:min(90vh,840px);background:linear-gradient(165deg, rgba(13,27,42,0.96), rgba(11,22,36,0.88));border:1px solid rgba(212,175,55,0.24);border-radius:28px;box-shadow:0 40px 100px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 20px 40px rgba(212,175,55,0.07);overflow:hidden;transform:perspective(1400px) rotateX(14deg) translateY(24px) scale(0.94);opacity:0;transition:transform .5s cubic-bezier(.16,1,.3,1), opacity .4s ease;will-change:transform">
+    <div style="position:absolute;top:0;left:0;right:0;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 18px 0 22px;background:linear-gradient(180deg, rgba(212,175,55,0.07), transparent);border-bottom:1px solid rgba(212,175,55,0.12);backdrop-filter:blur(8px);z-index:2">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg, var(--gold), var(--gold-dark));display:grid;place-items:center;box-shadow:0 4px 12px rgba(212,175,55,0.18)"><span style="font-size:14px">💬</span></div>
+        <div style="font-weight:700;letter-spacing:.2px;color:var(--gold-light);font-size:15px">Student Feedback — 2026</div>
+      </div>
+      <button id="wsc-feedback-close" aria-label="Close" style="width:36px;height:36px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:#fff;cursor:pointer;display:grid;place-items:center;transition:all .2s ease;backdrop-filter:blur(4px)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <iframe id="wsc-feedback-iframe" src="about:blank" style="position:absolute;inset:64px 0 0 0;width:100%;height:calc(100% - 64px);border:0;background:transparent" allow="clipboard-write" loading="lazy" title="Wadhwa Sir Feedback"></iframe>
+    <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(600px 200px at 50% -10%, rgba(212,175,55,0.10), transparent 60%), radial-gradient(400px 300px at 100% 100%, rgba(212,175,55,0.05), transparent 50%)"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const TALLY_URL = "https://tally.so/r/rjkyVM?transparentBackground=1&hideTitle=1";
+  const overlay = document.getElementById('wsc-feedback-overlay');
+  const card = document.getElementById('wsc-feedback-card');
+  const iframe = document.getElementById('wsc-feedback-iframe');
+  const closeBtn = document.getElementById('wsc-feedback-close');
+  const feedbackBtn = document.querySelector('.feedback-btn, button[aria-label="Feedback"]');
+  
+  if(!feedbackBtn) return;
+  
+  function openModal(e){
+    if(e) e.preventDefault();
+    iframe.src = TALLY_URL;
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    // trigger animation
+    requestAnimationFrame(()=>{
+      overlay.style.opacity = '1';
+      card.style.opacity = '1';
+      card.style.transform = 'perspective(1400px) rotateX(0deg) translateY(0) scale(1)';
+    });
+    if(navigator.vibrate) navigator.vibrate(12);
+    // haptic + analytics
+    try{ window.playablesSDK && window.playablesSDK.sendEvent('feedback_open'); }catch(e){}
+  }
+  
+  function closeModal(){
+    overlay.style.opacity = '0';
+    card.style.opacity = '0';
+    card.style.transform = 'perspective(1400px) rotateX(14deg) translateY(24px) scale(0.94)';
+    document.body.style.overflow = '';
+    setTimeout(()=>{
+      overlay.style.display = 'none';
+      iframe.src = 'about:blank'; // stop video/audio
+    }, 350);
+    if(navigator.vibrate) navigator.vibrate(8);
+  }
+  
+  feedbackBtn.addEventListener('click', openModal);
+  
+  // Auto-open after 180s for first-time visitors - 2026
+  const FEEDBACK_SEEN = 'wsc-feedback-seen-v1';
+  function markFeedbackSeen(){ try{ localStorage.setItem(FEEDBACK_SEEN, Date.now().toString()); }catch(e){} }
+  const originalOpen = openModal;
+  openModal = function(e){ markFeedbackSeen(); return originalOpen(e); };
+  
+  if(!localStorage.getItem(FEEDBACK_SEEN)){
+    setTimeout(()=>{
+      if(overlay.style.display !== 'flex' && document.visibilityState === 'visible'){
+        openModal();
+      }
+    }, 180000); // 180 seconds
+  }
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && overlay.style.display === 'flex') closeModal(); });
+  
+  // 3D tilt on desktop
+  let ticking = false;
+  card.addEventListener('mousemove', (e)=>{
+    if(window.innerWidth < 768) return;
+    if(!ticking){
+      requestAnimationFrame(()=>{
+        const r = card.getBoundingClientRect();
+        const x = (e.clientX - r.left - r.width/2) / r.width;
+        const y = (e.clientY - r.top - r.height/2) / r.height;
+        card.style.transform = `perspective(1400px) rotateX(${-y*4}deg) rotateY(${x*4}deg) scale(1)`;
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+  card.addEventListener('mouseleave', ()=>{
+    card.style.transform = 'perspective(1400px) rotateX(0deg) rotateY(0deg) scale(1)';
+  });
+  
+  // Close on successful submit via postMessage from Tally redirect
+  window.addEventListener('message', (e)=>{
+    if(e.origin.includes('tally.so') && e.data && e.data.includes('formSubmitted')){
+      setTimeout(closeModal, 1200);
+    }
+  });
+})();
+</script>
+
+
+</body>
+</html>

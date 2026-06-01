@@ -1,0 +1,11 @@
+{
+  "name": "WADHWA SIR'S CLASSROOM",
+  "short_name": "Wadhwa Sir",
+  "icons": [
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ],
+  "theme_color": "#0d1b2a",
+  "background_color": "#0d1b2a",
+  "display": "standalone"
+}

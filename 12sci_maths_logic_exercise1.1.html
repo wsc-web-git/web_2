@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no">
+    <title>Exercise 1.1 - Wadhwa Sir's Classroom</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* === SECURITY & RESETS === */
+        body {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            margin: 0; padding: 0; box-sizing: border-box; 
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Poppins', sans-serif;
+            background-color: var(--bg-color);
+            overflow: hidden;
+        }
+
+        /* === VARIABLES === */
+        :root {
+            --bg-color: #f8f9fa; --container-bg: #ffffff; --text-main: #1a1a1a;
+            --text-muted: #555555; --input-bg: #f0f2f5; --border-color: #e0e0e0;
+            --header-bg: #ffffff; --shadow-color: rgba(0, 0, 0, 0.1);
+            --accent-orange: #e68a00; --board-bg: #fdfdfd;
+        }
+
+        body.dark-mode {
+            --bg-color: #000000; --container-bg: #0d1b2a; --text-main: #ffffff;
+            --text-muted: #a0aab2; --input-bg: rgba(255, 255, 255, 0.05); --border-color: rgba(255, 255, 255, 0.1);
+            --header-bg: #1b263b; --shadow-color: rgba(0, 0, 0, 0.8); --board-bg: #0b141e;
+        }
+
+        /* === EXERCISE 1.1 UI === */
+        #exercise-11-page { position:absolute; inset:0; background:var(--bg-color); display:flex; justify-content:center; z-index:500; }
+        .ex11-container { width:100%; max-width:420px; height:100vh; margin:0 auto; background:var(--board-bg); display:flex; flex-direction:column; overflow:hidden; position:relative; box-shadow: 0 0 20px var(--shadow-color); }
+        .ex11-header { background:var(--header-bg); padding:14px 12px 0; color:#fff; box-sizing:border-box; }
+        .ex11-brand-small { text-align:center; font-size:13px; letter-spacing:2px; color:var(--text-muted); font-weight:600; text-transform:uppercase; }
+        .ex11-brand-big { text-align:center; font-size:clamp(36px,10vw,44px); font-weight:900; letter-spacing:0.5px; line-height:1; margin:2px 0 10px; color:var(--text-main); white-space:nowrap; overflow:hidden; }
+        .ex11-title-row { display:grid; grid-template-columns:48px minmax(0,1fr) 48px; align-items:center; gap:6px; padding:0 2px 12px; width:100%; box-sizing:border-box; overflow:hidden; }
+        .ex11-circle { width:48px; height:48px; min-width:48px; min-height:48px; border-radius:50%; background:var(--input-bg); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--text-main); box-shadow:0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06); cursor:pointer; transition:transform 0.15s; }
+        .ex11-circle:active { transform:scale(0.96); }
+        .ex11-circle svg { width:19px; height:19px; }
+        .ex11-title { font-size:clamp(20px,5.8vw,26px); font-weight:800; letter-spacing:0.2px; color:var(--text-main); text-align:center; white-space:normal; line-height:1.15; }
+        .ex11-divider { height:1px; background:var(--border-color); }
+        .ex11-subtitle { background:var(--header-bg); padding:12px 10px; text-align:center; font-size:clamp(20px,5.5vw,24px); font-weight:700; color:var(--text-main); line-height:1.2; }
+        .ex11-controls { background:var(--header-bg); display:grid; grid-template-columns:1fr 1.12fr 1fr; gap:8px; padding:10px 10px 12px; align-items:stretch; }
+        .ex11-btn { padding:12px 6px; border-radius:16px; background:var(--input-bg); color:var(--text-muted); font-weight:600; font-size:clamp(13px,3.8vw,15px); border:none; cursor:pointer; text-align:center; box-shadow:inset 0 1px 0 rgba(255,255,255,0.04), 0 3px 8px rgba(0,0,0,0.28); display:flex; align-items:center; justify-content:center; min-height:56px; line-height:1.15; transition: 0.3s; }
+        .ex11-btn.active { background: var(--accent-orange) !important; color: #fff !important; }
+        .ex11-btn-play { background:#ff9a00; color:#fff; box-shadow:0 0 20px rgba(255,154,0,0.4), 0 4px 10px rgba(0,0,0,0.3); font-size:clamp(16px,4.6vw,18px); font-weight:700; gap:7px; }
+        
+        /* FIX: Adjusted padding-bottom to ensure the pallet is not cut off */
+        .ex11-content { flex:1; background:var(--bg-color); padding:10px 10px 120px; overflow:auto; }
+        
+        /* FIX: Changed height:100% to min-height:100% and height:auto so it expands correctly */
+        .ex11-board { background:var(--board-bg); border-radius:22px; min-height:100%; height:auto; box-shadow:inset 0 2px 8px rgba(0,0,0,0.55); padding: 15px; box-sizing: border-box; margin-bottom: 20px;}
+        
+        .text-3d-card { background: linear-gradient(145deg, var(--input-bg), var(--header-bg)); border: 1px solid var(--border-color); padding: 20px; border-radius: 15px; box-shadow: 5px 5px 15px var(--shadow-color), inset -2px -2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; display: block; width: 100%; box-sizing: border-box; word-break: break-word; color: var(--text-main);}
+
+        /* MENUS */
+        .ex11-menu-left { position:absolute; top:158px; left:18px; background:var(--container-bg); border:1px solid var(--border-color); border-radius:22px; padding:14px; width:272px; box-shadow:0 16px 40px rgba(0,0,0,0.7); display:none; flex-direction:column; gap:12px; z-index:600; }
+        .ex11-menu-left.active { display:flex; animation:ex11fade 0.2s ease; }
+        .ex11-menu-item { padding:16px 18px; border-radius:14px; font-weight:600; color:var(--text-main); border:1px solid var(--border-color); background:var(--input-bg); cursor:pointer; font-size:16px; transition:transform 0.1s; text-align: center; }
+        .ex11-menu-item:active { transform:scale(0.98); }
+        .ex11-menu-item.dark { background:var(--input-bg); border-color:var(--border-color); }
+        .ex11-menu-item.red { background:#ef4444; border:none; color:white; box-shadow:0 4px 14px rgba(239,68,68,0.35); }
+
+        .ex11-menu-right { position:absolute; top:158px; right:18px; background:var(--container-bg); border:1px solid var(--border-color); border-radius:18px; padding:12px; width:210px; box-shadow:0 16px 40px rgba(0,0,0,0.7); display:none; z-index:600; }
+        .ex11-menu-right.active { display:block; animation:ex11fade 0.2s ease; }
+        .ex11-menu-right-item { padding:15px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:12px; color:var(--text-main); font-weight:600; text-align:center; cursor:pointer; font-size:16px; margin-bottom: 8px;}
+        .ex11-menu-right-item:last-child { margin-bottom: 0; }
+
+        @keyframes ex11fade { from { opacity:0; transform:translateY(-6px);} to { opacity:1; transform:translateY(0);} }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        
+        .btn-breathe { animation: breathe 1.5s infinite; }
+        @keyframes breathe { 0% { box-shadow: 0 0 5px #ff9a00; transform: scale(1); } 50% { box-shadow: 0 0 20px #ff9a00; transform: scale(1.05); } 100% { box-shadow: 0 0 5px #ff9a00; transform: scale(1); } }
+
+        /* DARK MODE OVERRIDES */
+        body.dark-mode #exercise-11-page .ex11-container { background:var(--board-bg); }
+        body.dark-mode #exercise-11-page .ex11-header,
+        body.dark-mode #exercise-11-page .ex11-subtitle,
+        body.dark-mode #exercise-11-page .ex11-controls { background:#1b263b !important; }
+        body.dark-mode #exercise-11-page .ex11-circle { color:#ffffff !important; background:#233044 !important; border-color:rgba(255,255,255,0.08) !important; }
+        body.dark-mode #exercise-11-page .ex11-btn { background:#233044 !important; color:#94a3b8 !important; border-color:rgba(255,255,255,0.08) !important; }
+        body.dark-mode #exercise-11-page .ex11-menu-left,
+        body.dark-mode #exercise-11-page .ex11-menu-right { background:#0f172a !important; border-color:#1e293b !important; }
+        body.dark-mode #exercise-11-page .ex11-menu-item,
+        body.dark-mode #exercise-11-page .ex11-menu-item.dark,
+        body.dark-mode #exercise-11-page .ex11-menu-right-item { background:#1e293b !important; border-color:#334155 !important; color:#fff !important; }
+        body.dark-mode #exercise-11-page .ex11-subtitle { color:#ffffff !important; }
+        body.dark-mode #exercise-11-page .ex11-btn-play { background:#ff9a00 !important; color:#fff !important; box-shadow:0 0 24px rgba(255,154,0,0.45), 0 6px 14px rgba(0,0,0,0.35) !important; }
+        body.dark-mode #exercise-11-page .ex11-btn.active { background: #ff9a00 !important; color: #fff !important; }
+        body.dark-mode #exercise-11-page .ex11-board { background:#0b141e !important; }
+        body.dark-mode #exercise-11-page .ex11-title,
+        body.dark-mode #exercise-11-page .ex11-brand-big { color:#ffffff !important; }
+        body.dark-mode #exercise-11-page .ex11-divider { background:rgba(255,255,255,0.08) !important; }
+    
+/* === LONG PRESS COPY ENABLE === */
+body, body * {
+    -webkit-user-select: text !important;
+    -khtml-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: default !important;
+}
+button,
+.ex11-btn,
+.ex11-circle,
+.ex11-menu-item,
+.ex11-menu-right-item,
+.ex11-btn-play {
+    -webkit-user-select: none !important;
+    -khtml-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+}
+
+
+.wsc-footer{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  text-align: center;
+  font-size: 12px;
+  padding: 6px 8px;
+  z-index: 9999;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+</style>
+</head>
+<body>
+
+<div id="exercise-11-page" onclick="closeEx11Menus()">
+  <div class="ex11-container" onclick="event.stopPropagation()">
+    <div class="ex11-header">
+      <div class="ex11-brand-small">WADHWA SIR'S</div>
+      <div class="ex11-brand-big">CLASSROOM</div>
+      <div class="ex11-title-row">
+        <button class="ex11-circle" onclick="toggleEx11Left(event)" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="19" r="2.2"/></svg>
+        </button>
+        <div class="ex11-title">EXERCISE 1.1</div>
+        <button class="ex11-circle" onclick="toggleEx11Right(event)" aria-label="Options">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="ex11-divider"></div>
+    <div class="ex11-subtitle">Board Expected Solution</div>
+    <div class="ex11-divider"></div>
+    <div class="ex11-controls">
+      <button class="ex11-btn">Non Stop</button>
+      <button class="ex11-btn ex11-btn-play"><span>▶</span> Play</button>
+      <button class="ex11-btn active">By<br>Sentence</button>
+    </div>
+    <div class="ex11-content">
+      <div class="ex11-board"></div>
+    </div>
+
+    <div id="ex11-left-menu" class="ex11-menu-left">
+      <div class="ex11-menu-item dark" onclick="toggleTheme(); closeEx11Menus()"><i class="fa-solid fa-moon"></i> Toggle Dark Mode</div>
+      <div class="ex11-menu-item red" onclick="exitExercise()"><i class="fa-solid fa-power-off"></i> Exit Exercise 1.1</div>
+    </div>
+
+    <div id="ex11-right-menu" class="ex11-menu-right">
+      <div class="ex11-menu-right-item" onclick="openEx11Question(1)">Question 1</div>
+      <div class="ex11-menu-right-item" onclick="openEx11Question(2)">Question 2</div>
+      <div class="ex11-menu-right-item" onclick="openEx11Question(3)">Question 3</div>
+      <div class="ex11-menu-right-item" onclick="openEx11Question(4)">Question 4</div>
+      <div class="ex11-menu-right-item" onclick="openEx11Question(5)">Question 5</div>
+      <div class="ex11-menu-right-item" onclick="openSummaryPage(); closeEx11Menus()">SUMMARY</div>
+    </div>
+  </div>
+
+  <div class="wsc-footer">© 2026 Wadhwa Sir's Classroom, Ulhasnagar. For personal study use only.</div>
+</div>
+
+<div id="summary-page" style="display:none; position:absolute; inset:0; background:var(--bg-color); justify-content:center; z-index:600;">
+  <div class="ex11-container" onclick="event.stopPropagation()">
+    <div class="ex11-header">
+      <div class="ex11-brand-small">WADHWA SIR'S</div>
+      <div class="ex11-brand-big">CLASSROOM</div>
+      <div class="ex11-title-row" style="grid-template-columns:48px minmax(0,1fr) 48px;">
+        <button class="ex11-circle" onclick="closeSummaryPage()" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="ex11-title">SUMMARY FOR STUDENTS</div>
+        <div style="width:48px;"></div>
+      </div>
+    </div>
+    <div class="ex11-divider"></div>
+    <div class="ex11-content" style="padding-bottom:20px;">
+      <div class="ex11-board">
+        <div class="text-3d-card" style="line-height:1.7; font-size:1.02rem;">
+          <div style="font-weight:800; font-size:1.25rem; color:var(--accent-orange); margin-bottom:14px; border-bottom:2px solid var(--accent-orange); padding-bottom:6px;">SUMMARY FOR STUDENTS</div>
+          <p style="margin:0; text-align:justify;">
+            This interactive module presents the complete board expected solutions for Maharashtra HSC Mathematics Exercise 1.1 on Mathematical Logic. It covers identification of statements with truth values, symbolic translation of compound statements using connectives ∧, ∨, →, ↔ and negation, evaluation of truth values for compound propositions, truth evaluation under given assignments, and writing negations of simple statements. Each question is broken into stepwise marks as examiners award them, with Professor Wadhwa's expert notes highlighting common traps such as the meaning of neither nor, the role of but as and, negation of inequalities, and the implication truth table. Audio narration in Indian English guides you sentence by sentence, prompting you to think first, then revealing the solution incrementally. The Non Stop mode gives full solution instantly for revision, while By Sentence mode builds active recall. Students benefit by seeing exact board language, understanding mark distribution, avoiding frequent mistakes, and practicing with immediate feedback. The design reduces cognitive load, improves retention, and builds exam confidence through structured practice, expert insights, and voice assisted learning tailored for HSC preparation.
+          </p>
+          <div style="margin-top:20px; text-align:center;">
+            <button onclick="closeSummaryPage()" style="padding:12px 24px; border:none; border-radius:12px; background:linear-gradient(135deg,#6a11cb,#2575fc); color:white; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.2);">Back to Exercise</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+  <div class="wsc-footer">© 2026 Wadhwa Sir's Classroom, Ulhasnagar. For personal study use only.</div>
+</div>
+</div>
+
+<script>
+function openSummaryPage(){
+  const ex = document.getElementById('exercise-11-page');
+  const sum = document.getElementById('summary-page');
+  if(ex) ex.style.display='none';
+  if(sum) sum.style.display='flex';
+  window.speechSynthesis.cancel();
+  closeEx11Menus();
+}
+function closeSummaryPage(){
+  const ex = document.getElementById('exercise-11-page');
+  const sum = document.getElementById('summary-page');
+  if(sum) sum.style.display='none';
+  if(ex) ex.style.display='flex';
+}
+</script>
+
+<script>
+// === FIX: ENFORCE FULL SCREEN MODE ===
+function enforceFullScreen() {
+    if (!document.fullscreenElement && !document.mozFullScreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+        const docElm = document.documentElement;
+        if (docElm.requestFullscreen) { docElm.requestFullscreen().catch(()=>{}); } 
+        else if (docElm.webkitRequestFullscreen) { docElm.webkitRequestFullscreen().catch(()=>{}); }
+    }
+}
+document.body.addEventListener('click', enforceFullScreen);
+document.body.addEventListener('touchstart', enforceFullScreen, {passive: true});
+
+// === FIX: EXIT EXERCISE LOGIC ===
+function exitExercise() {
+    closeEx11Menus();
+    if(confirm("Are you sure you want to exit Exercise 1.1?")) {
+        // Clear screen and show exit message, attempt to close window
+        document.body.innerHTML = '<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:var(--bg-color); color:var(--text-main); font-size:1.2rem; font-weight:bold; text-align:center; padding:20px;"><i class="fa-solid fa-circle-check" style="color:#10b981; font-size:3rem; margin-bottom:15px;"></i>You have exited the exercise.<br><br><span style="font-size:0.95rem; color:var(--text-muted); font-weight:normal;">You can safely close this tab or window.</span></div>';
+        try { window.close(); } catch(e) {}
+    }
+}
+
+// === DATA DICTIONARY ===
+const ex11Questions = {
+  "EXERCISE 1.1": [
+    // --- Q1 ---
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "i) 5 + 4 = 13.",
+      qMarks: 2,
+      solution: [
+        { text: "It is a mathematical declarative sentence which is false. Hence, it is a statement in logic.", marks: 1 },
+        { text: "Its truth value is F.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "ii) x − 3 = 14",
+      qMarks: 1,
+      solution: [
+        { text: "It is an open sentence because its truth value depends upon the value of x. Hence, it is not a statement.", marks: 1 }
+      ],
+      note: "Students often mistake equations for statements. If it has a variable without a specific value or domain, it's an 'open sentence'. Examiners love testing this concept!"
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "iii) Close the door.",
+      qMarks: 1,
+      solution: [
+        { text: "It is an imperative sentence (an order/command). Hence, it is not a statement.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "iv) Zero is a complex number.",
+      qMarks: 2,
+      solution: [
+        { text: "It is a declarative sentence which is true (since 0 = 0 + 0i). Hence, it is a statement in logic.", marks: 1 },
+        { text: "Its truth value is T.", marks: 1 }
+      ],
+      note: "HSC Board Alert! Many students wrongly write 'F' here. Remember standard form: 0 = 0 + 0i. Every real number is a complex number. Don't lose this easy mark!"
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "v) Please get me breakfast.",
+      qMarks: 1,
+      solution: [
+        { text: "It is an imperative sentence (a request). Hence, it is not a statement.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "vi) Congruent triangles are similar.",
+      qMarks: 2,
+      solution: [
+        { text: "It is a declarative sentence which is true. Hence, it is a statement in logic.", marks: 1 },
+        { text: "Its truth value is T.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "vii) X² = X.",
+      qMarks: 1,
+      solution: [
+        { text: "It is an open sentence because its truth value depends on the value of X (it is true for X = 0, 1 and false for others). Hence, it is not a statement.", marks: 1 }
+      ],
+      note: "A classic examiner twist! Students see X² = X and think it's an algebraic identity (always true). It's not! Since it's only true for specific values (0 and 1), it's an open sentence."
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "viii) A quadratic equation cannot have more than two roots.",
+      qMarks: 2,
+      solution: [
+        { text: "It is a declarative sentence which is true. Hence, it is a statement in logic.", marks: 1 },
+        { text: "Its truth value is T.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "ix) Do you like Mathematics?",
+      qMarks: 1,
+      solution: [
+        { text: "It is an interrogative sentence (a question). Hence, it is not a statement.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "x) The sun sets in the west.",
+      qMarks: 2,
+      solution: [
+        { text: "It is a declarative sentence which is true. Hence, it is a statement in logic.", marks: 1 },
+        { text: "Its truth value is T.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "xi) All real numbers are whole numbers.",
+      qMarks: 2,
+      solution: [
+        { text: "It is a declarative sentence which is false (e.g., −2 is a real number but not a whole number). Hence, it is a statement in logic.", marks: 1 },
+        { text: "Its truth value is F.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "xii) Can you speak in Marathi?",
+      qMarks: 1,
+      solution: [
+        { text: "It is an interrogative sentence (a question). Hence, it is not a statement.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "xiii) x² − 6x − 7 = 0 when x = 7",
+      qMarks: 2,
+      solution: [
+        { text: "For x = 7, 7² − 6(7) − 7 = 49 − 42 − 7 = 0. It is a declarative sentence which is true. Hence, it is a statement in logic.", marks: 1 },
+        { text: "Its truth value is T.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "xiv) The sum of cube roots of unity is zero.",
+      qMarks: 2,
+      solution: [
+        { text: "It is a declarative sentence which is true (since 1 + ω + ω² = 0). Hence, it is a statement in logic.", marks: 1 },
+        { text: "Its truth value is T.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.1. State which of the following are statements. Justify. In case of statement, state its truth value.",
+      sub: "xv) It rains heavily.",
+      qMarks: 1,
+      solution: [
+        { text: "It is an open sentence because the truth value varies depending upon the time and place of observation. Hence, it is not a statement.", marks: 1 }
+      ],
+      note: null
+    },
+    // --- Q2 ---
+    {
+      header: "Q.2. Write the following compound statements symbolically.",
+      sub: "i) Nagpur is in Maharashtra and Chennai is in Tamilnadu.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: Nagpur is in Maharashtra. Let q: Chennai is in Tamilnadu.", marks: 1 },
+        { text: "The symbolic form is p ∧ q.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.2. Write the following compound statements symbolically.",
+      sub: "ii) Triangle is equilateral or isosceles.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: Triangle is equilateral. Let q: Triangle is isosceles.", marks: 1 },
+        { text: "The symbolic form is p ∨ q.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.2. Write the following compound statements symbolically.",
+      sub: "iii) The angle is right angle if and only if it is of measure 90°.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: The angle is a right angle. Let q: The angle is of measure 90°.", marks: 1 },
+        { text: "The symbolic form is p ↔ q.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.2. Write the following compound statements symbolically.",
+      sub: "iv) Angle is neither acute nor obtuse.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: Angle is acute. Let q: Angle is obtuse.", marks: 1 },
+        { text: "The given statement is 'Angle is not acute and angle is not obtuse'. The symbolic form is ∼ p ∧ ∼ q.", marks: 1 }
+      ],
+      note: "The phrase 'neither... nor...' is a frequent trap. Always remember it translates to 'not p AND not q' (∼ p ∧ ∼ q). Never use OR (∨) here!"
+    },
+    {
+      header: "Q.2. Write the following compound statements symbolically.",
+      sub: "v) If ∆ABC is right angled at B, then m∠A + m∠C = 90°.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: ∆ABC is right angled at B. Let q: m∠A + m∠C = 90°.", marks: 1 },
+        { text: "The symbolic form is p → q.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.2. Write the following compound statements symbolically.",
+      sub: "vi) Hima Das wins gold medal if and only if she runs fast.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: Hima Das wins gold medal. Let q: She runs fast.", marks: 1 },
+        { text: "The symbolic form is p ↔ q.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.2. Write the following compound statements symbolically.",
+      sub: "vii) x is not irrational number but is a square of an integer.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: x is an irrational number. Let q: x is a square of an integer.", marks: 1 },
+        { text: "The word 'but' represents logical conjunction (and). The symbolic form is ∼ p ∧ q.", marks: 1 }
+      ],
+      note: "Very Important for Boards! In logic, the English word 'but' acts exactly like 'AND' (∧). Don't let conversational English confuse your mathematical symbols."
+    },
+    // --- Q3 ---
+    {
+      header: "Q.3. Write the truth values of the following.",
+      sub: "i) 4 is odd or 1 is prime.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: 4 is odd. (Truth value is F) Let q: 1 is prime. (Truth value is F)", marks: 1 },
+        { text: "The statement is p ∨ q ≡ F ∨ F ≡ F. Hence, the truth value of the given statement is F.", marks: 1 }
+      ],
+      note: "Remember the truth table for 'OR' (∨): It is false ONLY when both statements are false. Write the intermediate steps clearly to secure your full step marks."
+    },
+    {
+      header: "Q.3. Write the truth values of the following.",
+      sub: "ii) 64 is a perfect square and 46 is a prime number.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: 64 is a perfect square. (Truth value is T) Let q: 46 is a prime number. (Truth value is F)", marks: 1 },
+        { text: "The statement is p ∧ q ≡ T ∧ F ≡ F. Hence, the truth value of the given statement is F.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.3. Write the truth values of the following.",
+      sub: "iii) 5 is a prime number and 7 divides 94.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: 5 is a prime number. (Truth value is T) Let q: 7 divides 94. (Truth value is F)", marks: 1 },
+        { text: "The statement is p ∧ q ≡ T ∧ F ≡ F. Hence, the truth value of the given statement is F.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.3. Write the truth values of the following.",
+      sub: "iv) It is not true that 5 − 3i is a real number.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: 5 − 3i is a real number. (Truth value is F)", marks: 1 },
+        { text: "The statement is ∼ p ≡ ∼ F ≡ T. Hence, the truth value of the given statement is T.", marks: 1 }
+      ],
+      note: "Pay close attention to 'It is not true that'. A common student mistake is trying to interpret the whole sentence at once. Find the truth value of the core statement (p) first, then negate it (∼p) at the very end."
+    },
+    {
+      header: "Q.3. Write the truth values of the following.",
+      sub: "v) If 3 × 5 = 8 then 3 + 5 = 15.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: 3 × 5 = 8. (Truth value is F) Let q: 3 + 5 = 15. (Truth value is F)", marks: 1 },
+        { text: "The statement is p → q ≡ F → F ≡ T. Hence, the truth value of the given statement is T.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.3. Write the truth values of the following.",
+      sub: "vi) Milk is white if and only if sky is blue.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: Milk is white. (Truth value is T) Let q: Sky is blue. (Truth value is T)", marks: 1 },
+        { text: "The statement is p ↔ q ≡ T ↔ T ≡ T. Hence, the truth value of the given statement is T.", marks: 1 }
+      ],
+      note: null
+    },
+    {
+      header: "Q.3. Write the truth values of the following.",
+      sub: "vii) 24 is a composite number or 17 is a prime number.",
+      qMarks: 2,
+      solution: [
+        { text: "Let p: 24 is a composite number. (Truth value is T) Let q: 17 is a prime number. (Truth value is T)", marks: 1 },
+        { text: "The statement is p ∨ q ≡ T ∨ T ≡ T. Hence, the truth value of the given statement is T.", marks: 1 }
+      ],
+      note: null
+    },
+    // --- Q4 ---
+    {
+      header: "Q.4. If the statements p, q are true statements and r, s are false statements then determine the truth values of the following.",
+      sub: "i) p ∨ (q ∧ r)",
+      qMarks: 2,
+      solution: [
+        { text: "≡ T ∨ (T ∧ F)", marks: 1 },
+        { text: "≡ T ∨ F ≡ T. Hence, the truth value is T.", marks: 1 }
+      ],
+      note: "Always solve the innermost brackets first, just like BODMAS in algebra! A common mistake is evaluating left-to-right without respecting the parentheses."
+    },
+    {
+      header: "Q.4. If the statements p, q are true statements and r, s are false statements then determine the truth values of the following.",
+      sub: "ii) (p → q) ∨ (r → s)",
+      qMarks: 2,
+      solution: [
+        { text: "≡ (T → T) ∨ (F → F)", marks: 1 },
+        { text: "≡ T ∨ T ≡ T. Hence, the truth value is T.", marks: 1 }
+      ],
+      note: "Board Trap! Many students blindly write F → F ≡ F. Remember the truth table for implication: A false premise implying a false conclusion is logically TRUE (T). Never forget this!"
+    },
+    {
+      header: "Q.4. If the statements p, q are true statements and r, s are false statements then determine the truth values of the following.",
+      sub: "iii) (q ∧ r) ∨ (∼p ∧ s)",
+      qMarks: 2,
+      solution: [
+        { text: "≡ (T ∧ F) ∨ (∼T ∧ F)", marks: 1 },
+        { text: "≡ F ∨ (F ∧ F) ≡ F ∨ F ≡ F. Hence, the truth value is F.", marks: 1 }
+      ],
+      note: "Write each simplification step on a new line. Skipping steps to save time will cost you marks if you make a tiny calculation error. Show the examiner you know exactly what you are doing."
+    },
+    {
+      header: "Q.4. If the statements p, q are true statements and r, s are false statements then determine the truth values of the following.",
+      sub: "iv) (p → q) ∧ ∼r",
+      qMarks: 2,
+      solution: [
+        { text: "≡ (T → T) ∧ ∼F", marks: 1 },
+        { text: "≡ T ∧ T ≡ T. Hence, the truth value is T.", marks: 1 }
+      ],
+      note: "Notice how ∼F smoothly becomes T. Always evaluate the negation symbol (∼) attached to a single variable before applying the main logical connective (∧, ∨)."
+    },
+    {
+      header: "Q.4. If the statements p, q are true statements and r, s are false statements then determine the truth values of the following.",
+      sub: "v) (∼r ↔ p) → ∼q",
+      qMarks: 2,
+      solution: [
+        { text: "≡ (∼F ↔ T) → ∼T", marks: 1 },
+        { text: "≡ (T ↔ T) → F ≡ T → F ≡ F. Hence, the truth value is F.", marks: 1 }
+      ],
+      note: "This tests your knowledge of two tables! First, biconditional (↔) is True when both sides match. Second, conditional (→) is False ONLY when T → F. Memorize these golden rules!"
+    },
+    {
+      header: "Q.4. If the statements p, q are true statements and r, s are false statements then determine the truth values of the following.",
+      sub: "vi) [∼p ∧ (∼q ∧ r)] ∨ [(q ∧ r) ∨ (p ∧ r)]",
+      qMarks: 2,
+      solution: [
+        { text: "≡ [∼T ∧ (∼T ∧ F)] ∨ [(T ∧ F) ∨ (T ∧ F)]", marks: 1 },
+        { text: "≡ [F ∧ (F ∧ F)] ∨ [F ∨ F] ≡ [F ∧ F] ∨ [F] ≡ F ∨ F ≡ F. Hence, the truth value is F.", marks: 1 }
+      ],
+      note: "Don’t get intimidated by long brackets. Treat the left square bracket and the right square bracket as two separate smaller sums. Solve them independently and combine them at the very end."
+    },
+    {
+      header: "Q.4. If the statements p, q are true statements and r, s are false statements then determine the truth values of the following.",
+      sub: "vii) [(∼p ∧ q) ∧ ∼r] ∨ [(q → p) → (∼s ∨ r)]",
+      qMarks: 2,
+      solution: [
+        { text: "≡ [(∼T ∧ T) ∧ ∼F] ∨ [(T → T) → (∼F ∨ F)]", marks: 1 },
+        { text: "≡ [(F ∧ T) ∧ T] ∨ [T → (T ∨ F)] ≡ [F ∧ T] ∨ [T → T] ≡ F ∨ T ≡ T. Hence, the truth value is T.", marks: 1 }
+      ],
+      note: "Another test of focus! Keep tracking the negations (∼) precisely. Even one dropped negation will cascade into a wrong final answer. Always double-check your initial substitution step!"
+    },
+    {
+      header: "Q.4. If the statements p, q are true statements and r, s are false statements then determine the truth values of the following.",
+      sub: "viii) ∼[(∼p ∧ r) ∨ (s → ∼q)] ↔ (p ∧ r)",
+      qMarks: 2,
+      solution: [
+        { text: "≡ ∼[(∼T ∧ F) ∨ (F → ∼T)] ↔ (T ∧ F)", marks: 1 },
+        { text: "≡ ∼[(F ∧ F) ∨ (F → F)] ↔ F ≡ ∼[F ∨ T] ↔ F ≡ ∼[T] ↔ F ≡ F ↔ F ≡ T. Hence, the truth value is T.", marks: 1 }
+      ],
+      note: "Notice the negation symbol (∼) outside the major square bracket? Calculate the entire inside of the square bracket first, then flip its truth value. Don’t multiply it inside like algebra!"
+    },
+    // --- Q5 ---
+    {
+      header: "Q.5. Write the negations of the following.",
+      sub: "i) Tirupati is in Andhra Pradesh.",
+      qMarks: 1,
+      solution: [
+        { text: "Tirupati is not in Andhra Pradesh.", marks: 1 }
+      ],
+      note: "Simple affirmative statements are negated by inserting 'not' after the auxiliary verb. Keep it grammatically simple!"
+    },
+    {
+      header: "Q.5. Write the negations of the following.",
+      sub: "ii) 3 is not a root of the equation x² + 3x − 18 = 0.",
+      qMarks: 1,
+      solution: [
+        { text: "3 is a root of the equation x² + 3x − 18 = 0.", marks: 1 }
+      ],
+      note: "The negation of a negative statement is an affirmative statement. Just remove the 'not'. Do not attempt to solve the quadratic equation!"
+    },
+    {
+      header: "Q.5. Write the negations of the following.",
+      sub: "iii) √2 is a rational number.",
+      qMarks: 1,
+      solution: [
+        { text: "√2 is not a rational number.", marks: 1 }
+      ],
+      note: "Board Hint: Although writing '√2 is an irrational number' is mathematically correct, it is safer to stick to the exact logical negation by using 'not' to guarantee you secure the mark without ambiguity."
+    },
+    {
+      header: "Q.5. Write the negations of the following.",
+      sub: "iv) Polygon ABCDE is a pentagon.",
+      qMarks: 1,
+      solution: [
+        { text: "Polygon ABCDE is not a pentagon.", marks: 1 }
+      ],
+      note: "Do not try to name another polygon like 'hexagon'. Negation means simply stating that the original proposition is false."
+    },
+    {
+      header: "Q.5. Write the negations of the following.",
+      sub: "v) 7 + 3 > 5",
+      qMarks: 1,
+      solution: [
+        { text: "7 + 3 ≤ 5", marks: 1 }
+      ],
+      note: "Examiner's favorite trick! The negation of 'greater than' (>) is NOT 'less than' (<). The exact negation is 'less than or equal to' (≤). Forgetting the equal to sign will lose you the mark immediately!"
+    }
+  ]
+};
+
+// === APP STATE ===
+let ex11State = {
+  exName: "EXERCISE 1.1",
+  idx: 0,
+  mode: "sentence",
+  step: 0,
+  userGotIt: false,
+  phase: "idle",
+  speaking: false
+};
+
+const appreciations = [
+  "Excellent thinking, you are on the right track",
+  "Brilliant, your approach matches the board solution",
+  "Perfect, keep this clarity for the exam",
+  "Outstanding, that is exactly how toppers think"
+];
+const motivations = [
+  "No worries, learning happens step by step",
+  "Good effort, now see the expert method",
+  "Stay confident, this concept will click now",
+  "Every mistake is a step towards mastery"
+];
+
+let isDarkMode = false;
+
+// === INITIALIZATION ===
+window.onload = () => {
+    initEx11For("EXERCISE 1.1");
+    enforceFullScreen();
+};
+
+function toggleTheme() {
+    isDarkMode = !isDarkMode;
+    document.body.classList.toggle('dark-mode');
+}
+
+function initEx11For(name){
+  ex11State.exName = name || "EXERCISE 1.1";
+  ex11State.idx = 0;
+  ex11State.mode = "sentence";
+  ex11State.phase = "idle";
+  setupEx11Controls();
+  clearEx11Board();
+}
+
+function clearEx11Board(){
+  const board = document.querySelector('#exercise-11-page .ex11-board');
+  const q = ex11Questions[ex11State.exName][ex11State.idx];
+  const subMatch = q.sub.match(/^([ivxlcdm]+\))/i);
+  const subLabel = subMatch ? subMatch[1] : 'i)';
+  const qNumMatch = q.header.match(/Q\.(\d+)/i);
+  const qNum = qNumMatch ? qNumMatch[1] : '1';
+  const prefix = qNum === '1' ? 'Press Play to start' : 'Play to start';
+  board.innerHTML = `<div class="text-3d-card" style="min-height:180px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-style:italic;">${prefix} Q${qNum} (${subLabel}</div>`;
+  updateEx11PlayButton('play');
+  setEx11Mode('sentence');
+}
+
+function setupEx11Controls(){
+  const btns = document.querySelectorAll('#exercise-11-page .ex11-controls .ex11-btn');
+  if(btns.length>=3){
+    btns[0].onclick = ()=>{ setEx11Mode('full'); window.speechSynthesis.cancel(); doEx11InstantFull(); };
+    btns[1].onclick = ()=>{ handleEx11Play(); };
+    btns[1].id = 'ex11-play-btn';
+    btns[2].onclick = ()=>{ setEx11Mode('sentence'); };
+    setEx11Mode('sentence');
+  }
+}
+
+function openEx11Question(num){
+  document.getElementById('ex11-right-menu').classList.remove('active');
+  if(num===1){ ex11State.idx=0; ex11State.phase='idle'; clearEx11Board(); }
+  else if(num===2){ ex11State.idx=15; ex11State.phase='idle'; clearEx11Board(); }
+  else if(num===3){ ex11State.idx=22; ex11State.phase='idle'; clearEx11Board(); }
+  else if(num===4){ ex11State.idx=29; ex11State.phase='idle'; clearEx11Board(); }
+  else if(num===5){ ex11State.idx=37; ex11State.phase='idle'; clearEx11Board(); }
+}
+
+function doEx11InstantFull(){
+  window.speechSynthesis.cancel();
+  ex11State.mode='full';
+  setEx11Mode('full');
+  renderEx11Instant();
+}
+
+function renderEx11Instant(){
+  ex11State.phase='completed';
+  const board = document.querySelector('#exercise-11-page .ex11-board');
+  board.innerHTML='';
+  const q = ex11Questions[ex11State.exName][ex11State.idx];
+  const card = document.createElement('div');
+  card.className='text-3d-card';
+  card.style.minHeight='180px';
+  let html = `<div><div style="font-weight:800; font-size:1.15rem; color:var(--accent-orange); margin-bottom:12px; border-bottom:2px solid var(--accent-orange); padding-bottom:4px;">${q.header}</div>`;
+  html += `<div style="margin-top:14px; font-size:1.08rem; line-height:1.7;"><span style="font-weight:700;">${q.sub}</span><span style="float:right; font-weight:700; color:var(--text-muted);">( ${q.qMarks} Marks )</span><div style="clear:both;"></div></div>`;
+  html += `<div style="margin-top:20px; font-weight:800; color:var(--accent-orange); border-bottom:1px solid var(--border-color); padding-bottom:5px;">Solution:</div>`;
+  q.solution.forEach(st=>{
+    html += `<div style="margin:10px 0; padding-left:12px; position:relative; line-height:1.6;"><span style="position:absolute; left:0;">–</span><span style="margin-left:8px;">${st.text}</span><span style="float:right; color:var(--text-muted); font-weight:600;">[ ${st.marks} Mark ]</span><div style="clear:both;"></div></div>`;
+  });
+  if(q.note){
+    html += `<div style="margin-top:15px; padding:10px; background:rgba(230,138,0,0.1); border-left:3px solid var(--accent-orange); font-style:italic; font-size:0.95rem;"><strong>Professor Wadhwa's Expert Note:</strong> ${q.note}</div>`;
+  }
+  html += `</div>`;
+  card.innerHTML=html;
+  board.appendChild(card);
+  const navDiv = document.createElement('div');
+  navDiv.id='ex11-nav';
+  navDiv.style.cssText='margin-top:20px; display:flex; gap:12px; justify-content:space-between;';
+  board.appendChild(navDiv);
+  showEx11Nav();
+  updateEx11PlayButton('replay');
+}
+
+function setEx11Mode(m){
+  ex11State.mode = m;
+  const btns = document.querySelectorAll('#exercise-11-page .ex11-controls .ex11-btn');
+  btns.forEach(b=>{ b.classList.remove('active'); });
+  if(m==='full'){ 
+    btns[0].classList.add('active'); 
+  } else { 
+    btns[2].classList.add('active'); 
+  }
+}
+
+function handleEx11Play(){
+  if(ex11State.phase === 'idle'){
+    loadEx11Question();
+  } else if(ex11State.phase === 'waiting-next'){
+    document.getElementById('ex11-nextprompt').style.display='none';
+    showNextEx11Step();
+  } else if(ex11State.phase === 'completed'){
+    if(ex11State.mode === 'full'){
+      setEx11Mode('sentence');
+    }
+    loadEx11Question();
+  }
+}
+
+function updateEx11PlayButton(state){
+  const btn = document.getElementById('ex11-play-btn');
+  if(!btn) return;
+  if(state==='play'){
+    btn.innerHTML = '<span>▶</span> Play';
+    btn.classList.add('btn-breathe');
+  } else if(state==='replay'){
+    btn.innerHTML = '<span>↻</span> Replay';
+    btn.classList.add('btn-breathe');
+  }
+}
+
+function loadEx11Question(){
+  ex11State.phase = 'reading';
+  updateEx11PlayButton('play');
+  const btn = document.getElementById('ex11-play-btn');
+  if(btn) btn.classList.remove('btn-breathe');
+  const board = document.querySelector('#exercise-11-page .ex11-board');
+  board.innerHTML = '';
+  const q = ex11Questions[ex11State.exName][ex11State.idx];
+  
+  const card = document.createElement('div');
+  card.className = 'text-3d-card';
+  card.style.minHeight='180px';
+  card.innerHTML = `
+    <div id="ex11-qarea">
+      <div style="font-weight:800; font-size:1.15rem; color:var(--accent-orange); margin-bottom:12px; border-bottom:2px solid var(--accent-orange); padding-bottom:4px;">${q.header}</div>
+      <div style="margin-top:14px; font-size:1.08rem; line-height:1.7;">
+        <span style="font-weight:700;">${q.sub}</span>
+        <span style="float:right; font-weight:700; color:var(--text-muted);">( ${q.qMarks} Marks )</span>
+      </div>
+      <div style="clear:both;"></div>
+    </div>
+    <div id="ex11-thinking" style="display:none; text-align:center; margin-top:25px; color:#888; font-style:italic; animation: blink 1.2s infinite;">You are Thinking...</div>
+    <div id="ex11-choice" style="display:none; margin-top:18px; display:flex; gap:12px; justify-content:flex-end;"></div>
+    <div id="ex11-solution" style="margin-top:20px;"></div>
+    <div id="ex11-nextprompt" style="display:none; text-align:center; margin-top:12px; color:#999; font-size:0.92rem;">Think next step on your own</div>
+    <div id="ex11-feedback" style="display:none; margin-top:20px; text-align:center;"></div>
+    <div id="ex11-nav" style="display:none; margin-top:25px; display:flex; gap:12px; justify-content:space-between;"></div>
+  `;
+  board.appendChild(card);
+  
+  setTimeout(()=>{ readEx11Question(q); }, 300);
+}
+
+function readEx11Question(q){
+  let cleanSub = q.sub.replace(/^[ivxlcdm]+\)\s*/i, '').replace(/\+/g, ' plus ').replace(/=/g, ' equals ').replace(/−/g, ' minus ').replace(/²/g, ' square ').replace(/\./g, '');
+  let speakText;
+  const isFirstSub = /^i\)/i.test(q.sub.trim());
+  if(isFirstSub){
+    speakText = `${q.header} ${cleanSub}. This question comes for ${q.qMarks===1?'one':'two'} ${q.qMarks===1?'mark':'marks'} in HSC`;
+  } else {
+    speakText = `${cleanSub}. This question comes for ${q.qMarks===1?'one':'two'} ${q.qMarks===1?'mark':'marks'} in HSC`;
+  }
+  ex11Speak(speakText, ()=>{
+    ex11Speak("Think on it", ()=>{
+      document.getElementById('ex11-thinking').style.display='block';
+      ex11State.phase = 'waiting-choice';
+      showEx11ChoiceButtons();
+      updateEx11PlayButton('play');
+    });
+  });
+}
+
+function showEx11ChoiceButtons(){
+  const choice = document.getElementById('ex11-choice');
+  choice.style.display='flex';
+  choice.innerHTML = `
+    <button onclick="onEx11GotIt()" style="flex:1; padding:14px; border:none; border-radius:14px; background:linear-gradient(135deg,#11998e,#38ef7d); color:white; font-weight:800; font-size:0.95rem; box-shadow:0 6px 15px rgba(17,153,142,0.4), inset 0 1px 3px rgba(255,255,255,0.3); cursor:pointer;">I GOT IT</button>
+    <button onclick="onEx11SolutionPlease()" style="flex:1; padding:14px; border:none; border-radius:14px; background:linear-gradient(135deg,#FF416C,#FF4B2B); color:white; font-weight:800; font-size:0.95rem; box-shadow:0 6px 15px rgba(255,65,108,0.4), inset 0 1px 3px rgba(255,255,255,0.3); cursor:pointer;">SOLUTION PLEASE</button>
+  `;
+}
+
+function onEx11GotIt(){
+  ex11State.userGotIt = true;
+  document.getElementById('ex11-thinking').style.display='none';
+  document.getElementById('ex11-choice').style.display='none';
+  ex11State.phase = 'solving';
+  startEx11Solution();
+}
+
+function onEx11SolutionPlease(){
+  ex11State.userGotIt = false;
+  document.getElementById('ex11-thinking').style.display='none';
+  document.getElementById('ex11-choice').style.display='none';
+  const msg = motivations[Math.floor(Math.random()*motivations.length)];
+  ex11Speak(msg, ()=>{ ex11State.phase='solving'; startEx11Solution(); });
+}
+
+function startEx11Solution(){
+  ex11State.step = 0;
+  const solDiv = document.getElementById('ex11-solution');
+  solDiv.innerHTML = '<div style="font-weight:800; color:var(--accent-orange); margin-bottom:10px; border-bottom:1px solid var(--border-color); padding-bottom:5px;">Solution:</div>';
+  if(ex11State.mode==='full'){
+    showAllEx11Steps();
+  } else {
+    showNextEx11Step();
+  }
+}
+
+function showAllEx11Steps(){
+  const q = ex11Questions[ex11State.exName][ex11State.idx];
+  const solDiv = document.getElementById('ex11-solution');
+  q.solution.forEach((st,i)=>{
+    const line = document.createElement('div');
+    line.style.cssText='margin:10px 0; padding-left:12px; position:relative; line-height:1.6;';
+    line.innerHTML = `<span style="position:absolute; left:0;">–</span><span style="margin-left:8px;">${st.text}</span><span style="float:right; color:var(--text-muted); font-weight:600;">[ ${st.marks} Mark ]</span><div style="clear:both;"></div>`;
+    solDiv.appendChild(line);
+  });
+  const speakAll = q.solution.map(s=>`${s.text} on this step it carry ${s.marks===1?'one':'two'} mark`).join('. ');
+  ex11Speak(speakAll, ()=>{
+    if(q.note){
+      const noteDiv = document.createElement('div');
+      noteDiv.style.cssText='margin-top:15px; padding:10px; background:rgba(230,138,0,0.1); border-left:3px solid var(--accent-orange); font-style:italic; font-size:0.95rem;';
+      noteDiv.innerHTML = `<strong>Professor Wadhwa's Expert Note:</strong> ${q.note}`;
+      solDiv.appendChild(noteDiv);
+      ex11Speak("Professor Wadhwa's Expert Note. " + q.note, ()=>{ afterSolutionComplete(); });
+    } else {
+      afterSolutionComplete();
+    }
+  });
+}
+
+function showNextEx11Step(){
+  const q = ex11Questions[ex11State.exName][ex11State.idx];
+  if(ex11State.step >= q.solution.length){
+    if(q.note && !q.noteShown){
+      q.noteShown = true;
+      const solDiv = document.getElementById('ex11-solution');
+      const noteDiv = document.createElement('div');
+      noteDiv.style.cssText='margin-top:15px; padding:10px; background:rgba(230,138,0,0.1); border-left:3px solid var(--accent-orange); font-style:italic; font-size:0.95rem; animation:fadeIn 0.4s;';
+      noteDiv.innerHTML = `<strong>Professor Wadhwa's Expert Note:</strong> ${q.note}`;
+      solDiv.appendChild(noteDiv);
+      ex11Speak("Professor Wadhwa's Expert Note. " + q.note, ()=>{ afterSolutionComplete(); });
+    } else {
+      afterSolutionComplete();
+    }
+    return;
+  }
+  const st = q.solution[ex11State.step];
+  const solDiv = document.getElementById('ex11-solution');
+  const line = document.createElement('div');
+  line.style.cssText='margin:10px 0; padding-left:12px; position:relative; line-height:1.6; animation:fadeIn 0.4s;';
+  line.innerHTML = `<span style="position:absolute; left:0;">–</span><span style="margin-left:8px;">${st.text}</span><span style="float:right; color:var(--text-muted); font-weight:600;">[ ${st.marks} Mark ]</span><div style="clear:both;"></div>`;
+  solDiv.appendChild(line);
+  
+  const speakText = `${st.text} on this step it carry ${st.marks===1?'one':'two'} mark`;
+  ex11Speak(speakText, ()=>{
+    ex11State.step++;
+    if(ex11State.step < q.solution.length){
+      document.getElementById('ex11-nextprompt').style.display='block';
+      ex11State.phase = 'waiting-next';
+      ex11Speak("think it on your own", ()=>{ updateEx11PlayButton('play'); });
+    } else {
+      if(q.note){
+        setTimeout(()=>{ showNextEx11Step(); }, 300);
+      } else {
+        setTimeout(afterSolutionComplete, 400);
+      }
+    }
+  });
+}
+
+function afterSolutionComplete(){
+  ex11State.phase = 'completed';
+  updateEx11PlayButton('replay');
+  if(ex11State.userGotIt){
+    ex11Speak("was your idea similar to solution", ()=>{
+      const fb = document.getElementById('ex11-feedback');
+      fb.style.display='block';
+      fb.innerHTML = `
+        <div style="font-weight:700; margin-bottom:12px;">Was your idea similar to Solution?</div>
+        <div style="display:flex; gap:12px; justify-content:center;">
+          <button onclick="onEx11Feedback(true)" style="padding:12px 22px; border:none; border-radius:12px; background:linear-gradient(135deg,#11998e,#38ef7d); color:white; font-weight:700; box-shadow:0 4px 12px rgba(17,153,142,0.3); cursor:pointer;">YES</button>
+          <button onclick="onEx11Feedback(false)" style="padding:12px 22px; border:none; border-radius:12px; background:linear-gradient(135deg,#FF416C,#FF4B2B); color:white; font-weight:700; box-shadow:0 4px 12px rgba(255,65,108,0.3); cursor:pointer;">NO</button>
+        </div>
+      `;
+    });
+  } else {
+    showEx11Nav();
+  }
+}
+
+function onEx11Feedback(yes){
+  document.getElementById('ex11-feedback').style.display='none';
+  const msg = yes ? appreciations[Math.floor(Math.random()*appreciations.length)] : motivations[Math.floor(Math.random()*motivations.length)];
+  ex11Speak(msg, ()=>{ showEx11Nav(); });
+}
+
+function showEx11Nav(){
+  const nav = document.getElementById('ex11-nav');
+  nav.style.display='flex';
+  const isFirst = ex11State.idx===0;
+  const total = ex11Questions[ex11State.exName].length;
+  const isLast = ex11State.idx >= total-1;
+  nav.innerHTML = `
+    <button ${isFirst?'disabled':''} onclick="ex11Prev()" style="flex:1; padding:12px; border:none; border-radius:12px; background:${isFirst?'#555':'linear-gradient(135deg,#6a11cb,#2575fc)'}; color:white; font-weight:700; opacity:${isFirst?'0.5':'1'}; box-shadow:0 4px 12px rgba(0,0,0,0.2); cursor:pointer;">Previous</button>
+    <button ${isLast?'disabled':''} onclick="ex11Next()" style="flex:1; padding:12px; border:none; border-radius:12px; background:${isLast?'#555':'linear-gradient(135deg,#f7971e,#ffd200)'}; color:#000; font-weight:700; opacity:${isLast?'0.5':'1'}; box-shadow:0 4px 12px rgba(247,151,30,0.3); cursor:pointer;">Next</button>
+  `;
+  
+  const board = document.querySelector('#exercise-11-page .ex11-board');
+  let pallet = document.getElementById('ex11-subpallet');
+  if(pallet) pallet.remove();
+  const q = ex11Questions[ex11State.exName][ex11State.idx];
+  const allQs = ex11Questions[ex11State.exName];
+  const group = [];
+  for(let i=0;i<allQs.length;i++){ if(allQs[i].header===q.header) group.push({q:allQs[i],idx:i}); }
+  if(group.length>1){
+    pallet = document.createElement('div');
+    pallet.id='ex11-subpallet';
+    pallet.style.cssText='margin-top:18px; padding:12px; background:var(--container-bg); border:1px solid var(--border-color); border-radius:16px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center;';
+    group.forEach(g=>{
+      const subMatch = g.q.sub.match(/^([ivxlcdm]+)\)/i);
+      const label = subMatch ? subMatch[1] : (group.indexOf(g)+1);
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.onclick = ()=>{ ex11State.idx=g.idx; ex11State.phase='idle'; clearEx11Board(); loadEx11Question(); };
+      const isActive = g.idx===ex11State.idx;
+      btn.style.cssText = `min-width:44px; padding:10px; border:1px solid ${isActive?'var(--accent-orange)':'var(--border-color)'}; border-radius:12px; font-weight:700; font-size:0.95rem; cursor:pointer; background:${isActive?'var(--accent-orange)':'var(--input-bg)'}; color:${isActive?'white':'var(--text-main)'}; box-shadow:${isActive?'0 3px 8px rgba(0,0,0,0.2)':'0 1px 3px var(--shadow-color)'};`;
+      pallet.appendChild(btn);
+    });
+    const card = board.querySelector('.text-3d-card');
+    if(card) card.appendChild(pallet);
+  }
+  if(q.header.startsWith('Q.1.') || q.header.startsWith('Q.2.') || q.header.startsWith('Q.3.') || q.header.startsWith('Q.4.') || q.header.startsWith('Q.5.')){
+    nav.innerHTML = '';
+    nav.style.display='none';
+  }
+}
+
+function ex11Prev(){ if(ex11State.idx>0){ ex11State.idx--; ex11State.phase='idle'; clearEx11Board(); } }
+function ex11Next(){ const total=ex11Questions[ex11State.exName].length; if(ex11State.idx<total-1){ ex11State.idx++; ex11State.phase='idle'; clearEx11Board(); } }
+
+let indianMaleVoice = null;
+
+// Load Indian English male voice
+function updateIndianVoice() {
+    const voices = window.speechSynthesis.getVoices();
+    indianMaleVoice = voices.find(v => v.lang === 'en-IN' && /male/i.test(v.name)) ||
+                      voices.find(v => v.lang.startsWith('en-IN') && /Ravi|male/i.test(v.name)) ||
+                      voices.find(v => v.lang.startsWith('en-IN')) ||
+                      voices.find(v => /en-IN/i.test(v.lang)) ||
+                      voices.find(v => /India|Indian/i.test(v.name));
+}
+window.speechSynthesis.onvoiceschanged = updateIndianVoice;
+updateIndianVoice();
+
+function ex11Speak(text, cb){
+  try{
+    window.speechSynthesis.cancel();
+    let speakText = text.replace(/∼/g, ' Negation ').replace(/~/g, ' Negation ').replace(/∧/g, ' And ').replace(/∨/g, ' Or ').replace(/→/g, ' Implies ').replace(/↔/g, ' Double implies ').replace(/∀/g, ' For all ').replace(/∃/g, ' There exists ');
+    const u = new SpeechSynthesisUtterance(speakText);
+    u.rate = 0.92; u.pitch=1; u.volume=1;
+    u.lang = 'en-IN';
+    if (indianMaleVoice) u.voice = indianMaleVoice;
+    u.onend = ()=>{ if(cb) cb(); };
+    window.speechSynthesis.speak(u);
+  }catch(e){ if(cb) cb(); }
+}
+
+function toggleEx11Left(e){ e.stopPropagation(); document.getElementById('ex11-left-menu').classList.toggle('active'); document.getElementById('ex11-right-menu').classList.remove('active'); }
+function toggleEx11Right(e){ e.stopPropagation(); document.getElementById('ex11-right-menu').classList.toggle('active'); document.getElementById('ex11-left-menu').classList.remove('active'); }
+function closeEx11Menus(){ const l=document.getElementById('ex11-left-menu'); if(l) l.classList.remove('active'); const r=document.getElementById('ex11-right-menu'); if(r) r.classList.remove('active'); }
+
+</script>
+</body>
+</html>

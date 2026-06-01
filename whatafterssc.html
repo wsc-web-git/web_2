@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="en" class="light-mode">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0">
+<title>Prof. Prakash Wadhwa's - Career Pathways After SSC 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { -webkit-tap-highlight-color: transparent; }
+  html, body { touch-action: manipulation; }
+  body {
+    font-family: 'Poppins', 'Inter', system-ui, -apple-system, sans-serif;
+    background: linear-gradient(180deg, #0c021a 0%, #1e0f3a 40%, #2a1450 100%);
+    background-attachment: fixed;
+    color: white;
+    overscroll-behavior-y: contain;
+    transition: background 0.5s ease, color 0.5s ease;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(650px 300px at 15% 8%, rgba(168,85,247,0.28), transparent 60%),
+      radial-gradient(550px 280px at 85% 12%, rgba(236,72,153,0.22), transparent 60%),
+      radial-gradient(500px 400px at 50% 85%, rgba(59,130,246,0.16), transparent 65%);
+    transition: opacity 0.5s ease;
+  }
+
+  /* =========================================================
+     ADVANCED LIGHT MODE ENGINE (ATTRIBUTE-SELECTOR BASED)
+     ========================================================= */
+  html.light-mode body {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+  }
+  html.light-mode body::before {
+    background: 
+      radial-gradient(650px 300px at 15% 8%, rgba(168,85,247,0.08), transparent 60%), 
+      radial-gradient(550px 280px at 85% 12%, rgba(236,72,153,0.08), transparent 60%), 
+      radial-gradient(500px 400px at 50% 85%, rgba(59,130,246,0.08), transparent 65%) !important;
+  }
+
+  /* 1. Global Background Overrides (Catches ALL stubborn cards) */
+  html.light-mode .card,
+  html.light-mode [class*="bg-[#13131a]"],
+  html.light-mode [class*="bg-[#14141f]"],
+  html.light-mode [class*="bg-[#0f0f14]"],
+  html.light-mode [class*="bg-[#1c1c27]"] {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0,0,0,0.02) !important;
+  }
+  
+  html.light-mode [class*="bg-[#1a1625]"] {
+    background-color: #f1f5f9 !important;
+    border-color: #e2e8f0 !important;
+  }
+  
+  html.light-mode [class*="bg-[#1f1f2b]"],
+  html.light-mode [class*="bg-[#2a2a35]"] {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  /* 2. Header and Special Containers */
+  html.light-mode header[class*="bg-[#0c021a]"] {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    border-color: #e2e8f0 !important;
+  }
+  html.light-mode .chip {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  /* 3. Typography Overrides (Inverts text cleanly) */
+  html.light-mode .text-white { color: #0f172a !important; }
+  html.light-mode .text-gray-200 { color: #334155 !important; }
+  html.light-mode .text-gray-300 { color: #475569 !important; }
+  html.light-mode .text-gray-400 { color: #64748b !important; }
+  html.light-mode .text-gray-500 { color: #94a3b8 !important; }
+  html.light-mode .text-gray-600 { color: #94a3b8 !important; } 
+
+  /* 4. PROTECTIONS: Keeps vibrant elements (buttons/logos) with white text */
+  html.light-mode button.text-white,
+  html.light-mode .filter-btn.active,
+  html.light-mode [class*="bg-gradient-to-"].text-white,
+  html.light-mode .tilt-card.text-white,
+  html.light-mode [class*="from-violet-"],
+  html.light-mode [class*="from-cyan-"],
+  html.light-mode [class*="from-red-"],
+  html.light-mode [class*="from-teal-"],
+  html.light-mode [class*="from-pink-"],
+  html.light-mode [class*="from-blue-"],
+  html.light-mode [class*="from-indigo-"],
+  html.light-mode [class*="from-amber-"],
+  html.light-mode [class*="from-rose-"],
+  html.light-mode [class*="from-green-"],
+  html.light-mode [class*="from-slate-"],
+  html.light-mode [class*="from-emerald-"] {
+    color: #ffffff !important;
+  }
+
+  /* Fix for gradient headings (Science/Commerce Stream) - keep transparent for bg-clip */
+  html.light-mode .bg-clip-text.text-transparent {
+    color: transparent !important;
+  }
+
+  /* 5. Colored Text Adaptations */
+  html.light-mode .text-purple-300, html.light-mode .text-purple-400 { color: #7e22ce !important; }
+  html.light-mode .text-amber-300, html.light-mode .text-amber-400 { color: #d97706 !important; }
+  html.light-mode .text-amber-100\/90 { color: #b45309 !important; }
+  html.light-mode .text-red-400 { color: #dc2626 !important; }
+  html.light-mode .text-green-400, html.light-mode .text-emerald-400 { color: #16a34a !important; }
+  html.light-mode .details h4 { color: #7e22ce !important; }
+
+  /* 6. Borders */
+  html.light-mode [class*="border-[#222230]"],
+  html.light-mode [class*="border-[#2a2a3a]"] { border-color: #e2e8f0 !important; }
+  html.light-mode [class*="border-white/5"] { border-color: rgba(0,0,0,0.08) !important; }
+  html.light-mode [class*="border-white/50"] { border-color: rgba(0,0,0,0.15) !important; }
+
+  /* 7. PERFECT SPLASH SCREEN FIXES */
+  html.light-mode #pre-splash,
+  html.light-mode #splash-screen {
+    background-color: #f8fafc !important;
+  }
+  html.light-mode [class*="from-purple-900"] {
+    --tw-gradient-from: rgba(168, 85, 247, 0.08) !important;
+    --tw-gradient-to: #f8fafc !important;
+    --tw-gradient-stops: var(--tw-gradient-from), #f8fafc, var(--tw-gradient-to) !important;
+  }
+  html.light-mode [class*="via-[#0c021a]"] {
+    --tw-gradient-stops: var(--tw-gradient-from), #f8fafc, var(--tw-gradient-to) !important;
+  }
+  html.light-mode #pre-splash h1,
+  html.light-mode #pre-splash h2,
+  html.light-mode #splash-screen h1,
+  html.light-mode #splash-screen h2,
+  html.light-mode .splash-text {
+    color: #0f172a !important;
+  }
+  html.light-mode #pre-splash h2.text-purple-400 { color: #7e22ce !important; }
+  html.light-mode .splash-text.text-gray-400 { color: #64748b !important; }
+  html.light-mode .splash-text.text-gray-300 { color: #475569 !important; }
+  html.light-mode [class*="from-[#1e0f3a]"] {
+    background-color: #ffffff !important;
+    background-image: none !important;
+  }
+
+  /* 8. Interactive Elements */
+  html.light-mode .expand-btn {
+    background-color: #f1f5f9 !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+  }
+  html.light-mode .expand-btn.text-white { color: #0f172a !important; }
+  html.light-mode .expand-btn:hover { background-color: #e2e8f0 !important; }
+  html.light-mode select {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+  html.light-mode select option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  /* Base structural styling */
+  .glass {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .card {
+    background: #13131a;
+    border: 1px solid #2a2a3a;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.02);
+  }
+  .chip {
+    background: rgba(15,15,20,0.82);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .filter-btn {
+    height: 44px;
+    transition: all 0.25s ease;
+  }
+  .filter-btn.active {
+    background: linear-gradient(90deg, #ff4ecd 0%, #8b5cf6 100%);
+    color: white;
+    box-shadow: 0 6px 20px rgba(139,92,246,0.35);
+  }
+  .details h4 {
+    color: #e9d5ff;
+    font-weight: 600;
+    margin-top: 1rem;
+    font-size: 0.95rem;
+  }
+  .details h4:first-child { margin-top: 0; }
+  .details ul { list-style: disc; padding-left: 1.1rem; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  
+  /* Animations */
+  .tilt-card {
+    transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  .float {
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,100% { transform: translateY(0px) rotate(-2deg); }
+    50% { transform: translateY(-18px) rotate(2deg); }
+  }
+
+  /* Splash Screen Animations */
+  .splash-text {
+    animation: fadeInUp 1s ease-out forwards;
+    opacity: 0;
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .delay-100 { animation-delay: 0.1s; }
+  .delay-300 { animation-delay: 0.3s; }
+  .delay-500 { animation-delay: 0.5s; }
+  .delay-700 { animation-delay: 0.7s; }
+  .delay-900 { animation-delay: 0.9s; }
+</style>
+</head>
+<body class="antialiased transition-colors duration-500">
+
+<div id="pre-splash" class="fixed inset-0 z-[110] bg-[#0c021a] flex flex-col items-center justify-center p-6 text-center transition-opacity duration-500">
+  <div class="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-[#0c021a] to-[#0c021a]"></div>
+  <div class="relative z-10 flex flex-col items-center">
+    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-600 to-pink-500 flex items-center justify-center font-bold text-[36px] shadow-lg shadow-purple-900/30 mb-6 text-white float">W</div>
+    <h1 class="text-[26px] sm:text-[34px] font-black leading-tight tracking-tight text-white mb-2 uppercase splash-text">Prof. Prakash Wadhwa's</h1>
+    <h2 class="text-[18px] sm:text-[22px] font-medium text-purple-400 mb-12 tracking-widest uppercase splash-text">Classroom</h2>
+    <button id="start-btn" class="px-14 py-4 rounded-full bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-[18px] shadow-[0_0_30px_rgba(139,92,246,0.4)] transition-all hover:scale-105 tracking-wider">START</button>
+  </div>
+</div>
+
+<div id="splash-screen" style="display: none; opacity: 0;" class="fixed inset-0 z-[100] bg-[#0c021a] flex flex-col items-center justify-center p-6 text-center transition-opacity duration-1000">
+  <div class="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/30 via-[#0c021a] to-[#0c021a]"></div>
+  
+  <div class="relative z-10 max-w-[720px] flex flex-col items-center">
+    <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 to-pink-500 flex items-center justify-center font-bold text-[28px] shadow-lg shadow-purple-900/30 mb-5 splash-text delay-100 text-white">W</div>
+    
+    <h2 class="text-[24px] sm:text-[30px] font-semibold leading-tight tracking-tight text-white mb-1 splash-text delay-100">Prof. Prakash Wadhwa's Classroom</h2>
+    <p class="text-[13px] text-gray-400 mb-8 splash-text delay-300">Prof. Prakash Wadhwa • Shaping</p>
+    
+    <span class="inline-flex items-center px-4 py-1.5 rounded-full text-[12px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/25 mb-8 splash-text delay-500">Maharashtra Board - SSC to Career Guide 2026</span>
+    
+    <h1 class="text-[40px] sm:text-[56px] font-black leading-[0.9] tracking-tight text-white uppercase mb-4 splash-text delay-700">WHAT AFTER SSC</h1>
+    <p class="text-gray-300 text-[15px] sm:text-[17px] leading-relaxed px-2 splash-text delay-900 max-w-lg">A Master Guide to Science & Commerce Maharashtra — simplified with timelines & math levels</p>
+    
+    <button id="splash-continue" class="mt-12 px-12 py-4 rounded-full bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-[16px] shadow-[0_0_30px_rgba(139,92,246,0.4)] opacity-0 transition-all duration-1000 hidden hover:scale-105">Continue</button>
+  </div>
+</div>
+
+<div class="relative z-10">
+
+  <header class="sticky top-0 z-50 bg-[#0c021a]/70 glass border-b border-white/5 transition-colors duration-500">
+    <div class="max-w-[720px] mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3 overflow-hidden">
+        <div class="w-10 h-10 shrink-0 rounded-2xl bg-gradient-to-br from-violet-600 to-pink-500 flex items-center justify-center font-bold text-[18px] shadow-lg shadow-purple-900/30 text-white">W</div>
+        <div class="truncate">
+          <div class="font-semibold text-[16px] sm:text-[17px] leading-tight tracking-tight truncate text-white">Prof. Prakash Wadhwa's Classroom</div>
+          <div class="text-[11px] text-gray-400 -mt-0.5 truncate">Prof. Prakash Wadhwa • Shaping</div>
+        </div>
+      </div>
+      
+      <button id="theme-toggle" aria-label="Toggle Theme" class="shrink-0 relative w-10 h-10 rounded-full bg-[#1c1c27] border border-[#2a2a3a] flex items-center justify-center shadow-lg hover:scale-105 transition-all focus:outline-none ml-2">
+        <span id="theme-icon" class="text-[16px] transition-transform">☀️</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-[720px] mx-auto px-4 pb-24">
+    
+    <div class="mt-5 flex justify-center">
+      <span class="inline-flex items-center px-4 py-1.5 rounded-full text-[12px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/25">Maharashtra Board - SSC to Career Guide 2026</span>
+    </div>
+
+    <h1 class="mt-4 text-[40px] sm:text-[48px] font-black leading-[0.9] tracking-tight text-center uppercase text-white">
+      WHAT AFTER SSC
+    </h1>
+    <p class="mt-3 text-center text-gray-300 text-[15px] leading-snug px-2">
+      A Master Guide to Science & Commerce Maharashtra — simplified with timelines & math levels.
+    </p>
+
+    <div class="mt-7 bg-[#13131a] border border-[#2a2a3a] rounded-[28px] overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+      
+      <div class="relative bg-gradient-to-r from-[#1e0f3a] to-[#13131a] px-5 py-5 border-b border-white/5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-[24px] shadow-lg shadow-purple-500/30 ring-1 ring-white/20">
+          🎓
+        </div>
+        <h2 class="text-[22px] sm:text-[26px] font-black tracking-tight text-white uppercase">INTRODUCTION</h2>
+      </div>
+      
+      <div class="px-5 py-6 flex flex-col gap-3 relative z-10">
+        <div class="chip glass rounded-2xl p-4 shadow-xl border border-white/5">
+          <div class="flex items-center gap-2.5 mb-2">
+            <span class="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center text-[16px]">🧮</span>
+            <span class="text-[14px] font-semibold text-white">MATHEMATICAL Aptitude Match</span>
+          </div>
+          <p class="text-[13px] text-gray-300 ml-10 leading-relaxed">
+            <strong class="text-white">Strong</strong> (calculus/advanced logic)<br>
+            <strong class="text-white">Moderate</strong> (statistics/arithmetic)<br>
+            <strong class="text-white">Weak</strong> (minimal math)
+          </p>
+        </div>
+        
+        <div class="chip glass rounded-2xl p-4 shadow-xl border border-white/5">
+          <div class="flex items-center gap-2.5 mb-2">
+            <span class="w-8 h-8 rounded-lg bg-sky-500/20 flex items-center justify-center text-[16px]">🕒</span>
+            <span class="text-[14px] font-semibold text-white">PROFESSIONAL Timeline</span>
+          </div>
+          <p class="text-[13px] text-gray-300 ml-10 leading-snug">The total chronological years required to become a certified professional directly after passing the 10th SSC Board Exams. (Note: HSC 11th & 12th accounts for the first 2 years of all timelines).</p>
+        </div>
+
+        <div class="chip glass rounded-2xl p-4 shadow-xl border border-white/5">
+          <div class="flex items-center gap-2.5 mb-2">
+            <span class="w-8 h-8 rounded-lg bg-fuchsia-500/20 flex items-center justify-center text-[16px]">💰</span>
+            <span class="text-[14px] font-semibold text-white">FINANCIAL ESTIMATION Mumbai Region</span>
+          </div>
+          <p class="text-[13px] text-gray-300 ml-10 leading-snug">A detailed breakdown of Government vs. Private college fees per year, plus the mandatory coaching class fees in Mumbai, resulting in a total estimated project cost.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 bg-[#14141f] rounded-[28px] p-5 sm:p-6 border border-[#222230] card">
+      <h2 class="text-[20px] font-bold text-white">Curated by Prof. Prakash Wadhwa</h2>
+      <p class="mt-2.5 text-[14px] leading-[1.6] text-gray-300">
+        Educational Expert with 20+ years in guiding SSC students across Maharashtra. This interactive guide replaces confusing PDFs with clear, colorful pathways. Choose careers based on what you love — and what you're good at.
+      </p>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <span class="px-3 py-1.5 rounded-full bg-[#1f1f2b] text-[12px] text-gray-300 border border-[#2a2a35]">Student-Friendly</span>
+        <span class="px-3 py-1.5 rounded-full bg-[#1f1f2b] text-[12px] text-gray-300 border border-[#2a2a35]">Updated Costs 2026</span>
+        <span class="px-3 py-1.5 rounded-full bg-[#1f1f2b] text-[12px] text-gray-300 border border-[#2a2a35]">Maharashtra Focused</span>
+      </div>
+    </div>
+
+    <div class="mt-5 bg-[#1a1625] border border-amber-500/30 rounded-[20px] p-4 flex gap-3">
+      <div class="text-[20px] leading-none mt-0.5">⚠️</div>
+      <div>
+        <div class="text-[12px] font-semibold text-amber-300 uppercase tracking-wide mb-1">KEY NOTE</div>
+        <p class="text-[13px] leading-snug text-amber-100/90">
+          <strong class="text-white">HSC 11th & 12th = FIRST 2 YEARS OF ALL timelines below.</strong> Your degree starts after 12th. Example: Engineering = 2 yrs HSC + 4 yrs B.Tech = 6 years total
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-6 bg-[#0f0f14] rounded-[28px] p-5 border border-[#1c1c27] card">
+      <h3 class="text-[17px] font-semibold mb-4 text-white">Filter Pathways:</h3>
+      
+      <div class="space-y-3.5">
+        <div>
+          <div class="text-[11px] text-gray-500 uppercase tracking-wider mb-2">MATH</div>
+          <div class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+            <button data-filter="math" data-value="all" class="filter-btn active px-4 rounded-full bg-[#2a2a35] text-sm font-medium whitespace-nowrap text-white">All</button>
+            <button data-filter="math" data-value="strong" class="filter-btn px-4 rounded-full bg-[#2a2a35] text-sm font-medium text-gray-300 whitespace-nowrap">Strong</button>
+            <button data-filter="math" data-value="moderate" class="filter-btn px-4 rounded-full bg-[#2a2a35] text-sm font-medium text-gray-300 whitespace-nowrap">Moderate</button>
+            <button data-filter="math" data-value="weak" class="filter-btn px-4 rounded-full bg-[#2a2a35] text-sm font-medium text-gray-300 whitespace-nowrap">Weak</button>
+          </div>
+        </div>
+        
+        <div>
+          <div class="text-[11px] text-gray-500 uppercase tracking-wider mb-2">TIME</div>
+          <div class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+            <button data-filter="time" data-value="all" class="filter-btn active px-4 rounded-full bg-[#2a2a35] text-sm font-medium whitespace-nowrap text-white">All</button>
+            <button data-filter="time" data-value="5-6" class="filter-btn px-4 rounded-full bg-[#2a2a35] text-sm font-medium text-gray-300 whitespace-nowrap">5-6 yrs</button>
+            <button data-filter="time" data-value="6-7" class="filter-btn px-4 rounded-full bg-[#2a2a35] text-sm font-medium text-gray-300 whitespace-nowrap">6-7 yrs</button>
+            <button data-filter="time" data-value="7+" class="filter-btn px-4 rounded-full bg-[#2a2a35] text-sm font-medium text-gray-300 whitespace-nowrap">7+ yrs</button>
+          </div>
+        </div>
+        
+        <div>
+          <div class="text-[11px] text-gray-500 uppercase tracking-wider mb-2">STREAM</div>
+          <div class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+            <button data-filter="stream" data-value="all" class="filter-btn active px-4 rounded-full bg-[#2a2a35] text-sm font-medium whitespace-nowrap text-white">All</button>
+            <button data-filter="stream" data-value="science" class="filter-btn px-4 rounded-full bg-[#2a2a35] text-sm font-medium text-gray-300 whitespace-nowrap">Science</button>
+            <button data-filter="stream" data-value="commerce" class="filter-btn px-4 rounded-full bg-[#2a2a35] text-sm font-medium text-gray-300 whitespace-nowrap">Commerce</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-10">
+      <h2 class="text-[32px] font-extrabold tracking-tight">
+        <span class="bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-orange-400 to-cyan-400">Science Stream</span>
+      </h2>
+      <p class="text-gray-400 text-[14px] mt-1">PCM, PCB, and beyond — pick by math comfort</p>
+    </div>
+
+    <div id="cards" class="mt-6 space-y-6">
+
+      <article class="card rounded-[28px] p-5" data-math="strong" data-time="5-6" data-stream="science">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-500 flex items-center justify-center text-[22px] shadow-lg shadow-fuchsia-900/30 text-white">⚙️</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">PCM • A</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Engineering & Technology</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-orange-500/15 text-orange-300 border border-orange-500/25">STRONG Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">6 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>CS/IT, AI & Data Science</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Mechanical, Civil, EXTC, Electrical</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Entrance: MHT-CET / JEE</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">GOVT</div><div class="text-[17px] font-semibold text-green-400">₹6-8L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹10-15L+</div></div>
+        </div>
+        <button class="expand-btn mt-3 w-full text-[13px] py-2 rounded-xl bg-[#1c1c27] hover:bg-[#232334] border border-[#2a2a3a] text-white">View Full Details ▼</button>
+        <div class="details hidden mt-4 pt-4 border-t border-[#2a2a3a] text-[13px] text-gray-300 space-y-3">
+          <h4>Overview</h4>
+          <p>Most preferred PCM path. 4-year B.E/B.Tech after HSC. Mumbai-Pune colleges have 90%+ placements for CS/IT. Core branches need GATE for PSUs.</p>
+          <h4>Timeline Breakdown</h4>
+          <p>HSC (2 yrs) + B.Tech (4 yrs) = 6 Years total. Optional M.Tech +2 = 8 Years.</p>
+          <h4>Fees Mumbai Region 2026</h4>
+          <ul>
+            <li>Govt/Aided (VJTI, SPIT, KJ Somaiya Aided): ₹80,000 - ₹1,00,000 per year</li>
+            <li>Private (DJ Sanghvi, Thadomal, NMIMS Mukesh Patel): ₹1.5L - 2.5L per year</li>
+            <li>Total 4-yr degree: Govt ₹3.2-4L, Private ₹7-10L</li>
+            <li>HSC + JEE/MHT-CET Coaching (Allen, Pace, Rao): ₹2-4L for 2 years</li>
+            <li>Hostel Mumbai: ₹1.2-1.8L per year extra</li>
+          </ul>
+          <h4>Sub-Careers with Exact Timelines</h4>
+          <ul>
+            <li><strong>CS/IT, AI & DS:</strong> 6 yrs, Avg package ₹8-15L</li>
+            <li><strong>Mechanical:</strong> 6 yrs, Core + MBA option</li>
+            <li><strong>Civil:</strong> 6 yrs, Govt jobs via MPSC</li>
+            <li><strong>EXTC/Electronics:</strong> 6 yrs, merges with IT/software</li>
+            <li><strong>Electrical:</strong> 6 yrs, PSUs via GATE</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="strong" data-time="6-7" data-stream="science">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-500 to-violet-600 flex items-center justify-center text-[22px] text-white">📐</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">PCM • B</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Architecture & Design</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-orange-500/15 text-orange-300 border border-orange-500/25">STRONG Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">7 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>B.Arch (5 yrs) + M.Arch optional</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>B.Des in UI/UX, Product, Interior</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Entrance: NATA, JEE Paper 2</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase">GOVT</div><div class="text-[17px] font-semibold text-green-400">₹4-6L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹8-15L+</div></div>
+        </div>
+        <button class="expand-btn mt-3 w-full text-[13px] py-2 rounded-xl bg-[#1c1c27] hover:bg-[#232334] border border-[#2a2a3a] text-white">View Full Details ▼</button>
+        <div class="details hidden mt-4 pt-4 border-t border-[#2a2a3a] text-[13px] text-gray-300 space-y-3">
+          <h4>Details</h4>
+          <p>B.Arch is 5 years (2+5=7 total with HSC). B.Des is 4 years (2+4=6 total). PCM with good drawing skills required.</p>
+          <ul>
+            <li>Govt Sir J.J College: ₹70k/yr = ₹3.5L total</li>
+            <li>Private Rachana Sansad, DY Patil: ₹1.5-3L/yr = ₹8-15L+</li>
+            <li>NATA/JEE Paper 2 Coaching Mumbai: ₹40,000 - ₹80,000</li>
+            <li>Portfolio & software (AutoCAD, Sketchup) needed</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="weak" data-time="7+" data-stream="science">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center text-[22px] text-white">🩺</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">PCB • C</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Medicine & Surgery</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-500/15 text-gray-300 border border-gray-500/25">WEAK/BASIC Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">7.5+ Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>MBBS, BDS, BAMS, BHMS, BVSc</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>NEET is mandatory + Biology focus</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Longest but most respected</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">GOVT</div><div class="text-[17px] font-semibold text-green-400">₹8-12L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹45-80L+</div></div>
+        </div>
+        <button class="expand-btn mt-3 w-full text-[13px] py-2 rounded-xl bg-[#1c1c27] hover:bg-[#232334] border border-[#2a2a3a] text-white">View Full Details ▼</button>
+        <div class="details hidden mt-4 pt-4 border-t border-[#2a2a3a] text-[13px] text-gray-300 space-y-3">
+          <h4>NEET Path</h4>
+          <p>MBBS = 5.5 yrs (incl internship) + HSC 2 = 7.5 yrs. With PG (MD/MS 3 yrs) = 10.5+ yrs.</p>
+          <ul>
+            <li>NEET Coaching Mumbai (Aakash, Allen, Lakshya): ₹2-5L for 2 years</li>
+            <li>Govt MBBS (GMC Mumbai, LTMMC, Cooper): ₹1-1.2L/yr = ₹6-7L + HSC ₹2L = ₹8-12L total</li>
+            <li>Private (DY Patil, MGM, Terna): ₹9-15L/yr = ₹45-75L total</li>
+            <li>Management Quota: ₹80L - 1.2Cr total — avoid unless financially strong</li>
+            <li>BDS 5 yrs, BAMS/BHMS 5.5 yrs, BVSc 5.5 yrs — lower fees, faster practice</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="weak" data-time="6-7" data-stream="science">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center text-[22px] text-white">🏥</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">PCB • D</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Allied Healthcare</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-500/15 text-gray-300 border border-gray-500/25">WEAK/BASIC Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">6-6.5 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>BPT (Physio), B.Sc Nursing, B.Sc MLT</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>OT, Radiology, Optometry</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Faster than MBBS, high demand</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">GOVT</div><div class="text-[17px] font-semibold text-green-400">₹3-5L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹6-10L+</div></div>
+        </div>
+        <button class="expand-btn mt-3 w-full text-[13px] py-2 rounded-xl bg-[#1c1c27] hover:bg-[#232334] border border-[#2a2a3a] text-white">View Full Details ▼</button>
+        <div class="details hidden mt-4 pt-4 border-t border-[#2a2a3a] text-[13px] text-gray-300 space-y-3">
+          <p>HSC 2 + degree 3-4.5 yrs. High demand post-COVID in Mumbai hospitals.</p>
+          <ul>
+            <li>BPT 4.5 yrs, Nursing 4 yrs, MLT/Radiology/Optometry 3-4 yrs</li>
+            <li>Govt (Nair, KEM, Sion): ₹50k-80k/yr = ₹2-3L total</li>
+            <li>Private (NM, Hinduja): ₹1.5-2L/yr = ₹6-10L</li>
+            <li>Starting salary Mumbai: ₹3.5-6L, abroad scope high</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="moderate" data-time="6-7" data-stream="science">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center text-[22px] text-white">💊</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">PCB/PCM • E</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Pharmacy</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-500/15 text-blue-300 border border-blue-500/25">MODERATE Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">6-8 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>B.Pharm (4 yrs) + M.Pharm (2 yrs)</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Pharm.D (6 yrs) - clinical</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Pharma industry, research, abroad</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">GOVT</div><div class="text-[17px] font-semibold text-green-400">₹3.5-5L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹6-10L+</div></div>
+        </div>
+        <button class="expand-btn mt-3 w-full text-[13px] py-2 rounded-xl bg-[#1c1c27] hover:bg-[#232334] border border-[#2a2a3a] text-white">View Full Details ▼</button>
+        <div class="details hidden mt-4 pt-4 border-t border-[#2a2a3a] text-[13px] text-gray-300 space-y-3">
+          <ul>
+            <li>Entrance: MHT-CET PCB/PCM</li>
+            <li>Govt ICT Mumbai, Bombay College of Pharmacy: ₹85k/yr</li>
+            <li>Private: ₹1.5-2L/yr. Pharm.D: ₹2-2.5L/yr</li>
+            <li>Careers: Cipla, Sun Pharma, clinical research, US licensing</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="varies" data-time="5-6" data-stream="science">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600 to-sky-500 flex items-center justify-center text-[22px] text-white">🔬</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">PCM/B • F</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Pure Sciences & Research</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-teal-500/15 text-teal-300 border border-teal-500/25">VARIES Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">5-6 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>B.Sc Physics/Maths/Stats (STRONG)</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Biotech/Microbiology (MODERATE)</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Agriculture</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">GOVT</div><div class="text-[17px] font-semibold text-green-400">₹1.5-2.5L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹3-5L+</div></div>
+        </div>
+        <button class="expand-btn mt-3 w-full text-[13px] py-2 rounded-xl bg-[#1c1c27] hover:bg-[#232334] border border-[#2a2a3a] text-white">View Full Details ▼</button>
+        <div class="details hidden mt-4 pt-4 border-t border-[#2a2a3a] text-[13px] text-gray-300 space-y-3">
+          <p>B.Sc 3 yrs + HSC 2 = 5 yrs. With M.Sc 2 = 7 yrs total for research.</p>
+          <ul>
+            <li>Govt (Ruia, St. Xavier's, Fergusson): ₹15-30k/yr</li>
+            <li>Private: ₹60k-1L/yr</li>
+            <li>Path to IIT JAM, TIFR, ISRO, Data Science</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="strong" data-time="5-6" data-stream="science">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-[22px] text-white">✈️</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">PCM • G</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Defense & Aviation</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-orange-500/15 text-orange-300 border border-orange-500/25">STRONG Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">4-6 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>NDA (free) + SSB coaching ₹30-50k</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Commercial Pilot ₹35-50L+</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">NDA</div><div class="text-[17px] font-semibold text-green-400">FREE + Stipend</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PILOT</div><div class="text-[17px] font-semibold text-red-400">₹35-50L</div></div>
+        </div>
+        <button class="expand-btn mt-3 w-full text-[13px] py-2 rounded-xl bg-[#1c1c27] hover:bg-[#232334] border border-[#2a2a3a] text-white">View Full Details ▼</button>
+        <div class="details hidden mt-4 pt-4 border-t border-[#2a2a3a] text-[13px] text-gray-300 space-y-3">
+          <p>NDA after 12th PCM: 3 yrs training Khadakwasla + 1 yr academy = 4 yrs (total 6 with HSC). Fully funded.</p>
+          <p>Commercial Pilot: HSC PCM 55%, 18-24 months flight school (Bombay Flying Club, IGRUA). No degree needed.</p>
+        </div>
+      </article>
+    </div>
+
+    <div class="mt-12">
+      <h2 class="text-[32px] font-extrabold tracking-tight">
+        <span class="bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-orange-400 to-cyan-400">Commerce Stream</span>
+      </h2>
+      <p class="text-gray-400 text-[14px] mt-1">Numbers, business, law — low math options available</p>
+    </div>
+
+    <div class="mt-6 space-y-6">
+      <article class="card rounded-[28px] p-5" data-math="strong moderate weak" data-time="6-7" data-stream="commerce">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-[22px] text-white">💼</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">COMM • A</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">CA / CMA / CS</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-violet-500/15 text-violet-300 border border-violet-500/25">STRONG to WEAK Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">5-7 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>CA (STRONG, 7 yrs), CMA (MODERATE, 5-6 yrs), CS (WEAK, 5-6 yrs)</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Institute fees ₹80k-1L, coaching ₹2.5-4L</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-center">
+          <div class="text-center"><div class="text-[11px] text-gray-500 uppercase tracking-wide">TOTAL</div><div class="text-[17px] font-semibold text-amber-400">₹4-6L+</div></div>
+        </div>
+        <button class="expand-btn mt-3 w-full text-[13px] py-2 rounded-xl bg-[#1c1c27] hover:bg-[#232334] border border-[#2a2a3a] text-white">View Full Details ▼</button>
+        <div class="details hidden mt-4 pt-4 border-t border-[#2a2a3a] text-[13px] text-gray-300 space-y-3">
+          <ul>
+            <li><strong>CA:</strong> Foundation after 12th, Inter, 3-yr Articleship, Final. Total 7 yrs. Institute ₹80k + Coaching ₹2.5-4L</li>
+            <li><strong>CMA:</strong> 3 levels, 5-6 yrs. Fees ₹1.2L + coaching ₹1.5L</li>
+            <li><strong>CS:</strong> 3 levels, 5-6 yrs. Fees ₹1L + coaching ₹1.5L</li>
+            <li>Highest ROI — no college donation, earn during articleship</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="strong" data-time="7+" data-stream="commerce">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-600 to-pink-500 flex items-center justify-center text-[22px] text-white">📊</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">COMM • B</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Actuarial Science</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-red-500/15 text-red-300 border border-red-500/25">STRONGEST Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">6-8+ Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>13 papers, IAI fees ₹1.5L, coaching ₹2-3L</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-center">
+          <div class="text-center"><div class="text-[11px] text-gray-500 uppercase tracking-wide">TOTAL</div><div class="text-[17px] font-semibold text-amber-400">₹4-5L</div></div>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="moderate" data-time="5-6" data-stream="commerce">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center text-[22px] text-white">🎓</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">COMM • C</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Management BMS/BBA</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-500/15 text-blue-300 border border-blue-500/25">MODERATE</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">5-6 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>BMS, BBA, BBA-IB, Finance</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">GOVT</div><div class="text-[17px] font-semibold text-green-400">₹2-3L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹5-12L+</div></div>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="strong moderate" data-time="5-6" data-stream="commerce">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-[22px] text-white">💰</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">COMM • D</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">B.Com Specializations</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-teal-500/15 text-teal-300 border border-teal-500/25">VARIES Math</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">5 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>BAF, BFM (STRONG), BBI, General</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">GOVT</div><div class="text-[17px] font-semibold text-green-400">₹1.5-2.5L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹2.5-4.5L+</div></div>
+        </div>
+      </article>
+
+      <article class="card rounded-[28px] p-5" data-math="weak" data-time="6-7" data-stream="commerce">
+        <div class="flex items-start justify-between">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-slate-500 to-gray-600 flex items-center justify-center text-[22px] text-white">⚖️</div>
+          <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">COMM • E</span>
+        </div>
+        <h3 class="mt-3 text-[22px] font-bold leading-tight text-white">Integrated Law</h3>
+        <div class="mt-2.5 flex gap-2 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-500/15 text-gray-300 border border-gray-500/25">WEAK/BASIC</span>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1f1f2b] text-gray-300 border border-[#2a2a3a]">7 Years</span>
+        </div>
+        <ul class="mt-3.5 space-y-1.5 text-[14px] text-gray-300">
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>BA LLB, BLS LLB (5 yrs after 12th)</span></li>
+          <li class="flex gap-2"><span class="text-purple-400">•</span><span>Entrance: MH CET Law, CLAT</span></li>
+        </ul>
+        <div class="mt-4 pt-3 border-t border-[#222230] flex justify-between">
+          <div><div class="text-[11px] text-gray-500 uppercase tracking-wide">GLC MUMBAI</div><div class="text-[17px] font-semibold text-green-400">₹2.5-4L</div></div>
+          <div class="text-right"><div class="text-[11px] text-gray-500 uppercase tracking-wide">PRIVATE</div><div class="text-[17px] font-semibold text-red-400">₹7-18L+</div></div>
+        </div>
+      </article>
+    </div>
+
+    <div class="mt-12 bg-[#13131a] rounded-[28px] p-5 sm:p-6 border border-[#2a2a3a] card relative z-10" id="compare">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center text-[22px] shadow-lg shadow-purple-500/30 text-white">
+          ⚖️
+        </div>
+        <h2 class="text-[24px] sm:text-[28px] font-black tracking-tight text-white uppercase">Compare Careers</h2>
+      </div>
+      
+      <p class="text-[13px] text-gray-300 mb-6 leading-snug">Select up to 3 careers below to compare their timelines, mathematical aptitude, and financial estimates side-by-side.</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6" id="compare-selects">
+        <select class="w-full bg-[#1c1c27] text-[13px] text-gray-200 border border-[#2a2a3a] rounded-xl p-3 outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer text-white">
+          <option value="">-- Select Career 1 --</option>
+        </select>
+        <select class="w-full bg-[#1c1c27] text-[13px] text-gray-200 border border-[#2a2a3a] rounded-xl p-3 outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer text-white">
+          <option value="">-- Select Career 2 --</option>
+        </select>
+        <select class="w-full bg-[#1c1c27] text-[13px] text-gray-200 border border-[#2a2a3a] rounded-xl p-3 outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer text-white">
+          <option value="">-- Select Career 3 --</option>
+        </select>
+      </div>
+
+      <div class="overflow-x-auto no-scrollbar border border-[#2a2a3a] rounded-2xl bg-[#0f0f14]">
+        <div class="min-w-[600px]">
+          <div class="grid grid-cols-4 gap-1 p-2 border-b border-[#2a2a3a] bg-[#1a1625]" id="compare-header">
+            <div class="px-4 py-2 text-[12px] text-gray-400 uppercase font-semibold text-center flex items-center justify-center">Feature</div>
+            <div class="px-4 py-2 text-[14px] font-bold text-white text-center flex items-center justify-center">Career 1</div>
+            <div class="px-4 py-2 text-[14px] font-bold text-white text-center flex items-center justify-center">Career 2</div>
+            <div class="px-4 py-2 text-[14px] font-bold text-white text-center flex items-center justify-center">Career 3</div>
+          </div>
+          <div id="compare-body" class="p-2 space-y-1">
+            </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-12 bg-[#13131a] rounded-[28px] p-5 sm:p-6 border border-[#2a2a3a] card relative z-10" id="planner">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-[22px] shadow-lg shadow-teal-500/30 text-white">
+          💳
+        </div>
+        <h2 class="text-[24px] sm:text-[28px] font-black tracking-tight text-white uppercase">Mumbai Region Financial Planner</h2>
+      </div>
+
+      <p class="text-[13px] text-gray-300 mb-6 leading-snug">Estimate the total project cost for your chosen career path, including college fees and mandatory coaching in Mumbai.</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div>
+          <label class="block text-[11px] text-gray-500 uppercase tracking-wider mb-2">Select Career Path</label>
+          <select id="planner-career" class="w-full bg-[#1c1c27] text-[13px] text-gray-200 border border-[#2a2a3a] rounded-xl p-3 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer text-white">
+            <option value="">-- Choose Career --</option>
+            </select>
+        </div>
+        <div>
+          <label class="block text-[11px] text-gray-500 uppercase tracking-wider mb-2">Institution Type</label>
+          <select id="planner-type" class="w-full bg-[#1c1c27] text-[13px] text-gray-200 border border-[#2a2a3a] rounded-xl p-3 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer text-white">
+            <option value="govt">Government / Aided</option>
+            <option value="pvt">Private / Unaided</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="bg-[#1a1625] border border-[#2a2a3a] rounded-2xl p-5">
+        <div class="flex justify-between items-center border-b border-[#2a2a3a] pb-3 mb-3">
+          <span class="text-[13px] text-gray-400 font-medium">Estimated College Fees</span>
+          <span id="planner-college-fees" class="text-[15px] font-semibold text-white">₹0</span>
+        </div>
+        <div class="flex justify-between items-center border-b border-[#2a2a3a] pb-3 mb-3">
+          <span class="text-[13px] text-gray-400 font-medium">Estimated Coaching Fees</span>
+          <span id="planner-coaching-fees" class="text-[15px] font-semibold text-white">₹0</span>
+        </div>
+        <div class="flex justify-between items-center pt-1">
+          <span class="text-[14px] text-gray-300 font-bold uppercase tracking-wide">Total Project Cost</span>
+          <span id="planner-total-fees" class="text-[20px] font-black text-emerald-400">₹0</span>
+        </div>
+      </div>
+    </div>
+
+    <section class="mt-16 pb-8" id="contact">
+        <div class="glass border border-white/50 rounded-[32px] p-8 sm:p-12 relative overflow-hidden card">
+            <div class="absolute -right-20 -top-20 w-64 h-64 bg-gradient-to-br from-[#FF6B9D]/30 to-[#8B5CF6]/30 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -left-20 -bottom-20 w-64 h-64 bg-gradient-to-tr from-[#06B6D4]/30 to-[#10B981]/30 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="relative z-10 flex flex-col items-center text-center">
+                <div class="w-20 h-20 rounded-[28px] bg-gradient-to-br from-[#FF6B9D] to-[#8B5CF6] shadow-xl shadow-purple-200 flex items-center justify-center font-black text-white text-4xl mb-6 tilt-card float text-white">W</div>
+                <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3 text-white">Prof. Prakash Wadhwa's <span class="bg-clip-text text-transparent bg-gradient-to-r from-[#FF6B9D] via-[#8B5CF6] to-[#06B6D4]">Classroom</span></h2>
+                <p class="text-gray-300 font-medium max-w-2xl mb-8 leading-relaxed">
+                    We don't just teach syllabus; we build careers. Join the hundreds of top-scoring students in Ulhasnagar who have successfully bridged the gap between SSC and their dream professions.
+                </p>
+            </div>
+        </div>
+        
+        <div class="mt-8 text-center text-[12px] font-medium text-gray-500">
+            © 2026 Prof. Prakash Wadhwa's Classroom • Ulhasnagar • Shaping Intelligent Futures
+        </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // --- Audio & Haptic Feedback Setup ---
+  let audioCtx;
+  
+  function initAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  }
+
+  function playSound(type = 'click') {
+    if (!audioCtx) return;
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    if (type === 'pop') {
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(400, audioCtx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.05);
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+      oscillator.start(audioCtx.currentTime);
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    } else {
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+      oscillator.start(audioCtx.currentTime);
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    }
+  }
+
+  function playHaptic(pattern = [10]) {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(pattern);
+    }
+  }
+
+  function triggerInteraction(soundType = 'click', hapticPattern = [10]) {
+    initAudio();
+    playSound(soundType);
+    playHaptic(hapticPattern);
+  }
+
+  // --- Theme Toggle Logic ---
+  const themeToggle = document.getElementById('theme-toggle');
+  const themeIcon = document.getElementById('theme-icon');
+  
+  // Apply initial default light mode state to JS
+  if (document.documentElement.classList.contains('light-mode')) {
+       themeIcon.textContent = '🌙';
+       themeIcon.classList.add('text-slate-600');
+  }
+
+  themeToggle.addEventListener('click', () => {
+    triggerInteraction('pop', [15]); // Haptic & Sound
+    document.documentElement.classList.toggle('light-mode');
+    
+    if (document.documentElement.classList.contains('light-mode')) {
+       themeIcon.textContent = '🌙';
+       themeIcon.classList.add('text-slate-600');
+    } else {
+       themeIcon.textContent = '☀️';
+       themeIcon.classList.remove('text-slate-600');
+    }
+  });
+
+  // --- Step 1: Gateway & Splash Screen Logic ---
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.style.overflow = 'hidden'; // Lock scroll during splash
+    
+    const preSplash = document.getElementById('pre-splash');
+    const startBtn = document.getElementById('start-btn');
+    const splashScreen = document.getElementById('splash-screen');
+    const continueBtn = document.getElementById('splash-continue');
+    
+    const welcomeText = "Welcome to Prof. Prakash Wadhwa's Classroom. Our team is always ready to help you at each step. Dear parents and students, since you have passed SSC, so it's time now to think about WHAT NEXT? It's an obvious question arising in mind of each student, and you have reached the Right place for the answer. Start your journey of career from here.";
+    
+    const utterance = new SpeechSynthesisUtterance(welcomeText);
+    utterance.rate = 0.95; 
+
+    startBtn.addEventListener('click', () => {
+      triggerInteraction('pop', [15]); 
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      
+      preSplash.style.opacity = '0';
+      
+      setTimeout(() => {
+        preSplash.style.display = 'none';
+        splashScreen.style.display = 'flex';
+        
+        setTimeout(() => {
+          splashScreen.style.opacity = '1';
+        }, 50);
+        
+        setTimeout(() => {
+          continueBtn.classList.remove('hidden');
+          setTimeout(() => {
+            continueBtn.style.opacity = '1';
+          }, 50);
+        }, 1500);
+        
+      }, 500); 
+    });
+
+    continueBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); 
+      triggerInteraction('pop', [15]); 
+      window.speechSynthesis.cancel(); 
+      
+      splashScreen.style.opacity = '0';
+      setTimeout(() => {
+        splashScreen.style.display = 'none';
+        document.body.style.overflow = 'auto'; // Unlock scroll
+      }, 1000);
+    });
+  });
+
+  // --- Filtering Logic ---
+  const filters = { math: 'all', time: 'all', stream: 'all' };
+  
+  document.querySelectorAll('[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      triggerInteraction('click', [10]);
+
+      const type = btn.dataset.filter;
+      const value = btn.dataset.value;
+      filters[type] = value;
+      
+      document.querySelectorAll(`[data-filter="${type}"]`).forEach(b => {
+        b.classList.remove('active');
+        b.classList.add('bg-[#2a2a35]', 'text-gray-300');
+      });
+      btn.classList.add('active');
+      btn.classList.remove('bg-[#2a2a35]', 'text-gray-300');
+      
+      applyFilters();
+    });
+  });
+
+  function applyFilters() {
+    document.querySelectorAll('#cards article, .mt-6.space-y-6 > article').forEach(card => {
+      const m = card.dataset.math || '';
+      const t = card.dataset.time || '';
+      const s = card.dataset.stream || '';
+      
+      const mathOk = filters.math === 'all' || m.split(' ').includes(filters.math) || (filters.math === 'strong' && m.includes('strong'));
+      const timeOk = filters.time === 'all' || t === filters.time;
+      const streamOk = filters.stream === 'all' || s === filters.stream;
+      
+      card.style.display = (mathOk && timeOk && streamOk) ? 'block' : 'none';
+    });
+  }
+
+  document.querySelectorAll('.expand-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      triggerInteraction('pop', [15, 30, 15]); 
+
+      const details = btn.nextElementSibling;
+      const isHidden = details.classList.contains('hidden');
+      details.classList.toggle('hidden');
+      btn.textContent = isHidden ? 'Hide Details ▲' : 'View Full Details ▼';
+    });
+  });
+
+  // --- Shared Data ---
+  const careersData = {
+    'eng': { name: 'Engineering', math: 'Strong', time: '6 Years', fees: 'Govt: ₹6-8L | Pvt: ₹10-15L+', stream: 'Science', govt: '₹3.2 - 4L', pvt: '₹7 - 10L', coaching: '₹2 - 4L', totalGovt: '₹6 - 8L', totalPvt: '₹10 - 15L+' },
+    'arch': { name: 'Architecture', math: 'Strong', time: '7 Years', fees: 'Govt: ₹4-6L | Pvt: ₹8-15L+', stream: 'Science', govt: '₹3.5L', pvt: '₹8 - 15L', coaching: '₹40k - 80k', totalGovt: '₹4 - 6L', totalPvt: '₹8 - 15L+' },
+    'med': { name: 'Medicine (MBBS)', math: 'Weak', time: '7.5+ Years', fees: 'Govt: ₹8-12L | Pvt: ₹45-80L+', stream: 'Science', govt: '₹6 - 7L', pvt: '₹45 - 75L', coaching: '₹2 - 5L', totalGovt: '₹8 - 12L', totalPvt: '₹45 - 80L+' },
+    'allied': { name: 'Allied Health', math: 'Weak', time: '6-6.5 Years', fees: 'Govt: ₹3-5L | Pvt: ₹6-10L+', stream: 'Science', govt: '₹2 - 3L', pvt: '₹6 - 10L', coaching: 'Included', totalGovt: '₹3 - 5L', totalPvt: '₹6 - 10L+' },
+    'pharm': { name: 'Pharmacy', math: 'Moderate', time: '6-8 Years', fees: 'Govt: ₹3.5-5L | Pvt: ₹6-10L+', stream: 'Science', govt: '₹3.5L', pvt: '₹6 - 10L', coaching: 'Included', totalGovt: '₹3.5 - 5L', totalPvt: '₹6 - 10L+' },
+    'pure': { name: 'Pure Sciences', math: 'Varies', time: '5-6 Years', fees: 'Govt: ₹1.5-2.5L | Pvt: ₹3-5L+', stream: 'Science', govt: '₹45k - 90k', pvt: '₹1.8 - 3L', coaching: 'Included', totalGovt: '₹1.5 - 2.5L', totalPvt: '₹3 - 5L+' },
+    'def': { name: 'Defense/Aviation', math: 'Strong', time: '4-6 Years', fees: 'NDA: Free | Pilot: ₹35-50L', stream: 'Science', govt: 'Free', pvt: '₹35 - 50L', coaching: '₹30k - 50k (NDA)', totalGovt: 'Free + Stipend', totalPvt: '₹35 - 50L' },
+    'ca': { name: 'CA / CMA / CS', math: 'Strong to Weak', time: '5-7 Years', fees: 'Total: ₹4-6L+', stream: 'Commerce', govt: '₹80k - 1.2L', pvt: '₹80k - 1.2L', coaching: '₹2.5 - 4L', totalGovt: '₹4 - 6L+', totalPvt: '₹4 - 6L+' },
+    'act': { name: 'Actuarial', math: 'Strongest', time: '6-8+ Years', fees: 'Total: ₹4-5L', stream: 'Commerce', govt: '₹1.5L', pvt: '₹1.5L', coaching: '₹2 - 3L', totalGovt: '₹4 - 5L', totalPvt: '₹4 - 5L' },
+    'mgt': { name: 'Management', math: 'Moderate', time: '5-6 Years', fees: 'Govt: ₹2-3L | Pvt: ₹5-12L+', stream: 'Commerce', govt: '₹1.5 - 2L', pvt: '₹5 - 10L', coaching: '₹50k - 1L', totalGovt: '₹2 - 3L', totalPvt: '₹5 - 12L+' },
+    'bcom': { name: 'B.Com Spec.', math: 'Varies', time: '5 Years', fees: 'Govt: ₹1.5-2.5L | Pvt: ₹2.5-4.5L+', stream: 'Commerce', govt: '₹1 - 1.5L', pvt: '₹2.5 - 4L', coaching: 'Optional', totalGovt: '₹1.5 - 2.5L', totalPvt: '₹2.5 - 4.5L+' },
+    'law': { name: 'Law', math: 'Weak', time: '7 Years', fees: 'GLC: ₹2.5-4L | Pvt: ₹7-18L+', stream: 'Commerce', govt: '₹50k - 1.5L', pvt: '₹5 - 15L', coaching: '₹80k - 1.5L', totalGovt: '₹2.5 - 4L', totalPvt: '₹7 - 18L+' }
+  };
+
+  // --- Compare Careers Logic ---
+  const compareSelects = document.querySelectorAll('#compare-selects select');
+  const compareHeaderCells = document.querySelectorAll('#compare-header div');
+  const compareBody = document.getElementById('compare-body');
+
+  compareSelects.forEach(select => {
+    Object.entries(careersData).forEach(([key, data]) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = data.name;
+      select.appendChild(opt);
+    });
+  });
+
+  const compareRows = [
+    {key: 'stream', label: 'Stream'},
+    {key: 'math', label: 'Math Level'},
+    {key: 'time', label: 'Timeline'},
+    {key: 'fees', label: 'Fees Est.'}
+  ];
+
+  function updateCompare() {
+    const vals = Array.from(compareSelects).map(s => s.value);
+    
+    compareHeaderCells[1].textContent = vals[0] ? careersData[vals[0]].name : 'Career 1';
+    compareHeaderCells[2].textContent = vals[1] ? careersData[vals[1]].name : 'Career 2';
+    compareHeaderCells[3].textContent = vals[2] ? careersData[vals[2]].name : 'Career 3';
+
+    let html = '';
+    compareRows.forEach(row => {
+        html += `<div class="grid grid-cols-4 gap-1">`;
+        html += `<div class="px-4 py-3 font-semibold bg-[#1a1625] text-purple-300 text-[13px] rounded-xl flex items-center justify-center text-center leading-snug">${row.label}</div>`;
+        for(let j=0; j<3; j++) {
+            const v = vals[j];
+            const val = v ? careersData[v][row.key] : '—';
+            const bg = v ? 'bg-[#1c1c27]' : 'bg-[#13131a] border border-[#2a2a3a] border-dashed';
+            html += `<div class="px-4 py-3 text-[13px] ${bg} ${v ? 'text-gray-200' : 'text-gray-600'} rounded-xl flex items-center justify-center text-center leading-snug text-white">${val}</div>`;
+        }
+        html += `</div>`;
+    });
+    compareBody.innerHTML = html;
+  }
+
+  compareSelects.forEach(s => {
+    s.addEventListener('change', () => {
+      triggerInteraction('click', [10]);
+      updateCompare();
+    });
+  });
+  updateCompare(); 
+
+  // --- Financial Planner Logic ---
+  const plannerCareer = document.getElementById('planner-career');
+  const plannerType = document.getElementById('planner-type');
+  const collegeFeesEl = document.getElementById('planner-college-fees');
+  const coachingFeesEl = document.getElementById('planner-coaching-fees');
+  const totalFeesEl = document.getElementById('planner-total-fees');
+
+  Object.entries(careersData).forEach(([key, data]) => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = data.name;
+    plannerCareer.appendChild(opt);
+  });
+
+  function updatePlanner() {
+    const career = plannerCareer.value;
+    const type = plannerType.value;
+
+    if (!career) {
+      collegeFeesEl.textContent = '₹0';
+      coachingFeesEl.textContent = '₹0';
+      totalFeesEl.textContent = '₹0';
+      return;
+    }
+
+    const data = careersData[career];
+    collegeFeesEl.textContent = type === 'govt' ? data.govt : data.pvt;
+    coachingFeesEl.textContent = data.coaching;
+    totalFeesEl.textContent = type === 'govt' ? data.totalGovt : data.totalPvt;
+  }
+
+  plannerCareer.addEventListener('change', () => {
+    triggerInteraction('click', [10]);
+    updatePlanner();
+  });
+  
+  plannerType.addEventListener('change', () => {
+    triggerInteraction('click', [10]); 
+    updatePlanner();
+  });
+
+</script>
+<script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "wrlb7t59j1");
+</script>
+
+</body>
+</html>
